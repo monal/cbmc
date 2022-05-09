@@ -16,6 +16,7 @@ SRC = address_taken.cpp \
       may_alias.cpp \
       propagate.cpp \
       report_properties.cpp \
+      sentinel_dll.cpp \
       simplify_state_expr.cpp \
       state.cpp \
       state_encoding.cpp \
@@ -36,6 +37,7 @@ OBJ += ../util/util$(LIBEXT) \
        ../langapi/langapi$(LIBEXT) \
        ../solvers/solvers$(LIBEXT) \
        ../analyses/dirty$(OBJEXT) \
+       ../analyses/does_remove_const$(OBJEXT) \
        ../analyses/locals$(OBJEXT) \
        ../analyses/local_bitvector_analysis$(OBJEXT) \
        ../analyses/local_cfg$(OBJEXT) \

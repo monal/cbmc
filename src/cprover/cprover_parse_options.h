@@ -19,10 +19,12 @@ Author: Daniel Kroening, dkr@amazon.com
   "(smt2)(text)(outfile):"                                                     \
   "(variables)"                                                                \
   "(safety)(no-assertions)"                                                    \
-  "(solve)(unwind):"                                                           \
+  "(solve)(unwind):(trace)"                                                    \
   "(inline)(no-inline)"                                                        \
   "D:I:"                                                                       \
-  "(show-goto-functions)(show-loops)"                                          \
+  "(32)(64)"                                                                   \
+  "(show-goto-functions)(show-loops)(show-properties)"                         \
+  "(show-functions-with-loops)"                                                \
   "(validate-goto-model)"                                                      \
   "(verbose)"
 

@@ -16,6 +16,7 @@ Author: Daniel Kroening, dkr@amazon.com
 #include <util/exit_codes.h>
 #include <util/options.h>
 #include <util/signal_catcher.h>
+#include <util/ui_message.h>
 #include <util/unicode.h>
 #include <util/version.h>
 
@@ -23,10 +24,13 @@ Author: Daniel Kroening, dkr@amazon.com
 #include <goto-programs/goto_inline.h>
 #include <goto-programs/initialize_goto_model.h>
 #include <goto-programs/loop_ids.h>
+#include <goto-programs/remove_function_pointers.h>
 #include <goto-programs/set_properties.h>
 #include <goto-programs/show_goto_functions.h>
+#include <goto-programs/show_properties.h>
 
 #include <ansi-c/ansi_c_language.h>
+#include <ansi-c/gcc_version.h>
 #include <langapi/mode.h>
 
 #include "c_safety_checks.h"
@@ -56,6 +60,29 @@ static void show_goto_functions(const goto_modelt &goto_model)
       std::cout << symbol.display_name() << " /* " << symbol.name << " */\n";
       fun->second.body.output(ns, symbol.name, std::cout);
     }
+  }
+}
+
+static void show_functions_with_loops(const goto_modelt &goto_model)
+{
+  // sort alphabetically
+  const auto sorted = goto_model.goto_functions.sorted();
+
+  const namespacet ns(goto_model.symbol_table);
+  for(const auto &fun : sorted)
+  {
+    const symbolt &symbol = ns.lookup(fun->first);
+
+    if(symbol.is_file_local)
+      continue;
+
+    bool has_loop = false;
+    for(auto &instruction : fun->second.body.instructions)
+      if(instruction.is_backwards_goto())
+        has_loop = true;
+
+    if(has_loop)
+      std::cout << symbol.display_name() << '\n';
   }
 }
 
@@ -93,16 +120,46 @@ int cprover_parse_optionst::main()
       return CPROVER_EXIT_INCORRECT_TASK;
     }
 
-    bool perform_inlining = !cmdline.isset("no-inline");
-
     config.set(cmdline);
+
+    // configure gcc, if required
+    if(config.ansi_c.preprocessor == configt::ansi_ct::preprocessort::GCC)
+    {
+      gcc_versiont gcc_version;
+      gcc_version.get("gcc");
+      configure_gcc(gcc_version);
+    }
+
     console_message_handlert message_handler;
+    null_message_handlert null_message_handler;
 
     optionst options;
     auto goto_model =
       initialize_goto_model(cmdline.args, message_handler, options);
+
+    auto &remove_function_pointers_message_handler =
+      cmdline.isset("verbose")
+        ? static_cast<message_handlert &>(message_handler)
+        : static_cast<message_handlert &>(null_message_handler);
+
+    remove_function_pointers(
+      remove_function_pointers_message_handler,
+      goto_model,
+      cmdline.isset("safety"));
+
     adjust_float_expressions(goto_model);
     instrument_given_invariants(goto_model);
+
+    bool perform_inlining;
+
+    if(cmdline.isset("smt2"))
+    {
+      perform_inlining = !cmdline.isset("no-inline");
+    }
+    else
+    {
+      perform_inlining = cmdline.isset("inline");
+    }
 
     if(!perform_inlining)
       instrument_contracts(goto_model);
@@ -140,9 +197,22 @@ int cprover_parse_optionst::main()
       return CPROVER_EXIT_SUCCESS;
     }
 
+    if(cmdline.isset("show-functions-with-loops"))
+    {
+      show_functions_with_loops(goto_model);
+      return CPROVER_EXIT_SUCCESS;
+    }
+
     if(cmdline.isset("validate-goto-model"))
     {
       goto_model.validate();
+    }
+
+    if(cmdline.isset("show-properties"))
+    {
+      ui_message_handlert ui_message_handler(cmdline, "cprover");
+      show_properties(goto_model, ui_message_handler);
+      return CPROVER_EXIT_SUCCESS;
     }
 
     if(cmdline.isset("smt2") || cmdline.isset("text") || variable_encoding)
@@ -183,18 +253,21 @@ int cprover_parse_optionst::main()
         return CPROVER_EXIT_SUCCESS;
     }
 
-    std::size_t loop_limit;
+    solver_optionst solver_options;
 
     if(cmdline.isset("unwind"))
     {
-      loop_limit = std::stoull(cmdline.get_value("unwind"));
+      solver_options.loop_limit = std::stoull(cmdline.get_value("unwind"));
     }
     else
-      loop_limit = 1;
+      solver_options.loop_limit = 1;
+
+    solver_options.trace = cmdline.isset("trace");
+    solver_options.verbose = cmdline.isset("verbose");
 
     // solve
     auto result =
-      state_encoding_solver(goto_model, perform_inlining, loop_limit);
+      state_encoding_solver(goto_model, perform_inlining, solver_options);
 
     switch(result)
     {

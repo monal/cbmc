@@ -12,14 +12,6 @@ Author: Daniel Kroening, dkr@amazon.com
 #include <util/mathematical_expr.h>
 #include <util/pointer_expr.h>
 
-extern const irep_idt ID_state_is_cstring;
-extern const irep_idt ID_state_is_dynamic_object;
-extern const irep_idt ID_state_live_object;
-extern const irep_idt ID_state_object_size;
-extern const irep_idt ID_state_r_ok;
-extern const irep_idt ID_state_w_ok;
-extern const irep_idt ID_state_rw_ok;
-
 class state_typet : public typet
 {
 public:
@@ -52,6 +44,15 @@ public:
     PRECONDITION(this->address().type().id() == ID_pointer);
   }
 
+  // convenience constructor
+  evaluate_exprt(exprt state, exprt address)
+    : evaluate_exprt(
+        std::move(state),
+        address,
+        to_pointer_type(address.type()).base_type())
+  {
+  }
+
   const exprt &state() const
   {
     return op0();
@@ -65,6 +66,14 @@ public:
   const exprt &address() const
   {
     return op1();
+  }
+
+  // helper
+  evaluate_exprt with_state(exprt state) const
+  {
+    auto result = *this; // copy
+    result.state() = std::move(state);
+    return result;
   }
 };
 
@@ -125,6 +134,14 @@ public:
   {
     return op2();
   }
+
+  // helper
+  update_state_exprt with_state(exprt state) const
+  {
+    auto result = *this; // copy
+    result.state() = std::move(state);
+    return result;
+  }
 };
 
 /// \brief Cast an exprt to a \ref update_state_exprt
@@ -176,6 +193,14 @@ public:
   const exprt &size() const
   {
     return op1();
+  }
+
+  // helper
+  allocate_exprt with_state(exprt state) const
+  {
+    auto result = *this; // copy
+    result.state() = std::move(state);
+    return result;
   }
 };
 
@@ -233,6 +258,105 @@ inline const allocate_state_exprt &to_allocate_state_expr(const exprt &expr)
   PRECONDITION(expr.id() == ID_allocate_state);
   const allocate_state_exprt &ret =
     static_cast<const allocate_state_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+class reallocate_exprt : public ternary_exprt
+{
+public:
+  reallocate_exprt(exprt state, exprt address, exprt size, pointer_typet type)
+    : ternary_exprt(
+        ID_reallocate,
+        std::move(state),
+        std::move(address),
+        std::move(size),
+        std::move(type))
+  {
+    PRECONDITION(this->state().type().id() == ID_state);
+  }
+
+  const exprt &state() const
+  {
+    return op0();
+  }
+
+  exprt &state()
+  {
+    return op0();
+  }
+
+  const exprt &address() const
+  {
+    return op1();
+  }
+
+  const exprt &size() const
+  {
+    return op2();
+  }
+};
+
+/// \brief Cast an exprt to a \ref reallocate_exprt
+///
+/// \a expr must be known to be \ref reallocate_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref allocate_exprt
+inline const reallocate_exprt &to_reallocate_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_reallocate);
+  const reallocate_exprt &ret = static_cast<const reallocate_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+class reallocate_state_exprt : public ternary_exprt
+{
+public:
+  reallocate_state_exprt(exprt state, exprt address, exprt size)
+    : ternary_exprt(
+        ID_allocate_state,
+        std::move(state),
+        std::move(address),
+        std::move(size),
+        state_typet())
+  {
+    PRECONDITION(this->state().type().id() == ID_state);
+  }
+
+  const exprt &state() const
+  {
+    return op0();
+  }
+
+  exprt &state()
+  {
+    return op0();
+  }
+
+  const exprt &address() const
+  {
+    return op1();
+  }
+
+  const exprt &size() const
+  {
+    return op1();
+  }
+};
+
+/// \brief Cast an exprt to a \ref reallocate_state_exprt
+///
+/// \a expr must be known to be \ref reallocate_state_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref reallocate_state_exprt
+inline const reallocate_state_exprt &to_reallocate_state_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_reallocate_state);
+  const reallocate_state_exprt &ret =
+    static_cast<const reallocate_state_exprt &>(expr);
   validate_expr(ret);
   return ret;
 }
@@ -308,6 +432,14 @@ public:
   {
     return op1();
   }
+
+  // helper
+  state_live_object_exprt with_state(exprt state) const
+  {
+    auto result = *this; // copy
+    result.state() = std::move(state);
+    return result;
+  }
 };
 
 /// \brief Cast an exprt to a \ref state_live_object_exprt
@@ -331,6 +463,61 @@ inline state_live_object_exprt &to_state_live_object_expr(exprt &expr)
 {
   PRECONDITION(expr.id() == ID_state_live_object);
   state_live_object_exprt &ret = static_cast<state_live_object_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+class state_writeable_object_exprt : public binary_predicate_exprt
+{
+public:
+  state_writeable_object_exprt(exprt state, exprt address)
+    : binary_predicate_exprt(
+        std::move(state),
+        ID_state_writeable_object,
+        std::move(address))
+  {
+    PRECONDITION(this->state().type().id() == ID_state);
+    PRECONDITION(this->address().type().id() == ID_pointer);
+  }
+
+  const exprt &state() const
+  {
+    return op0();
+  }
+
+  exprt &state()
+  {
+    return op0();
+  }
+
+  const exprt &address() const
+  {
+    return op1();
+  }
+};
+
+/// \brief Cast an exprt to a \ref state_writeable_object_exprt
+///
+/// \a expr must be known to be \ref state_writeable_object_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref state_writeable_object_exprt
+inline const state_writeable_object_exprt &
+to_state_writeable_object_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_state_writeable_object);
+  const state_writeable_object_exprt &ret =
+    static_cast<const state_writeable_object_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_state_writeable_object_expr(const exprt &)
+inline state_writeable_object_exprt &to_state_writeable_object_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_state_writeable_object);
+  state_writeable_object_exprt &ret =
+    static_cast<state_writeable_object_exprt &>(expr);
   validate_expr(ret);
   return ret;
 }
@@ -361,6 +548,14 @@ public:
   const exprt &address() const
   {
     return op1();
+  }
+
+  // helper
+  state_is_cstring_exprt with_state(exprt state) const
+  {
+    auto result = *this; // copy
+    result.state() = std::move(state);
+    return result;
   }
 };
 
@@ -414,6 +609,14 @@ public:
   const exprt &address() const
   {
     return op1();
+  }
+
+  // helper
+  state_is_dynamic_object_exprt with_state(exprt state) const
+  {
+    auto result = *this; // copy
+    result.state() = std::move(state);
+    return result;
   }
 };
 
@@ -471,6 +674,14 @@ public:
   const exprt &address() const
   {
     return op1();
+  }
+
+  // helper
+  state_object_size_exprt with_state(exprt state) const
+  {
+    auto result = *this; // copy
+    result.state() = std::move(state);
+    return result;
   }
 };
 
@@ -543,6 +754,14 @@ public:
   {
     return op2();
   }
+
+  // helper
+  state_ok_exprt with_state(exprt state) const
+  {
+    auto result = *this; // copy
+    result.state() = std::move(state);
+    return result;
+  }
 };
 
 /// \brief Cast an exprt to a \ref state_ok_exprt
@@ -568,6 +787,149 @@ inline state_ok_exprt &to_state_ok_expr(exprt &expr)
     expr.id() == ID_state_r_ok || expr.id() == ID_state_w_ok ||
     expr.id() == ID_state_rw_ok);
   state_ok_exprt &ret = static_cast<state_ok_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+class enter_scope_state_exprt : public binary_exprt
+{
+public:
+  enter_scope_state_exprt(exprt state, exprt address)
+    : binary_exprt(
+        std::move(state),
+        ID_enter_scope_state,
+        std::move(address),
+        state_typet())
+  {
+    PRECONDITION(this->state().type().id() == ID_state);
+    PRECONDITION(this->address().type().id() == ID_pointer);
+  }
+
+  const exprt &state() const
+  {
+    return op0();
+  }
+
+  exprt &state()
+  {
+    return op0();
+  }
+
+  const exprt &address() const
+  {
+    return op1();
+  }
+
+  exprt &address()
+  {
+    return op1();
+  }
+
+#if 0
+  const exprt &size() const
+  {
+    return op2();
+  }
+
+  exprt &size()
+  {
+    return op2();
+  }
+#endif
+};
+
+/// \brief Cast an exprt to a \ref enter_scope_state_exprt
+///
+/// \a expr must be known to be \ref enter_scope_state_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref enter_scope_state_exprt
+inline const enter_scope_state_exprt &
+to_enter_scope_state_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_enter_scope_state);
+  const enter_scope_state_exprt &ret =
+    static_cast<const enter_scope_state_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_enter_scope_state_expr(const exprt &)
+inline enter_scope_state_exprt &to_enter_scope_state_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_enter_scope_state);
+  enter_scope_state_exprt &ret = static_cast<enter_scope_state_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+class exit_scope_state_exprt : public binary_exprt
+{
+public:
+  exit_scope_state_exprt(exprt state, exprt address)
+    : binary_exprt(
+        std::move(state),
+        ID_exit_scope_state,
+        std::move(address),
+        state_typet())
+  {
+    PRECONDITION(this->state().type().id() == ID_state);
+    PRECONDITION(this->address().type().id() == ID_pointer);
+  }
+
+  const exprt &state() const
+  {
+    return op0();
+  }
+
+  exprt &state()
+  {
+    return op0();
+  }
+
+  const exprt &address() const
+  {
+    return op1();
+  }
+
+  exprt &address()
+  {
+    return op1();
+  }
+
+#if 0
+  const exprt &size() const
+  {
+    return op2();
+  }
+
+  exprt &size()
+  {
+    return op2();
+  }
+#endif
+};
+
+/// \brief Cast an exprt to a \ref exit_scope_state_exprt
+///
+/// \a expr must be known to be \ref exit_scope_state_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref exit_scope_state_exprt
+inline const exit_scope_state_exprt &to_exit_scope_state_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_exit_scope_state);
+  const exit_scope_state_exprt &ret =
+    static_cast<const exit_scope_state_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_exit_scope_state_expr(const exprt &)
+inline exit_scope_state_exprt &to_exit_scope_state_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_exit_scope_state);
+  exit_scope_state_exprt &ret = static_cast<exit_scope_state_exprt &>(expr);
   validate_expr(ret);
   return ret;
 }

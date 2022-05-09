@@ -16,6 +16,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/options.h>
 #include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
+#include <util/pointer_predicates.h>
 
 #include <goto-programs/goto_model.h>
 
@@ -31,10 +32,17 @@ exprt index_array_size(const typet &type)
     PRECONDITION(false);
 }
 
+enum class access_typet
+{
+  R,
+  W
+};
+
 void c_safety_checks_rec(
   goto_functionst::function_mapt::value_type &,
   const exprt::operandst &guards,
   const exprt &,
+  access_typet,
   const namespacet &,
   goto_programt &);
 
@@ -49,7 +57,8 @@ void c_safety_checks_address_rec(
   {
     const auto &index_expr = to_index_expr(expr);
     c_safety_checks_address_rec(f, guards, index_expr.array(), ns, dest);
-    c_safety_checks_rec(f, guards, index_expr.index(), ns, dest);
+    c_safety_checks_rec(
+      f, guards, index_expr.index(), access_typet::R, ns, dest);
   }
   else if(expr.id() == ID_member)
   {
@@ -62,6 +71,7 @@ void c_safety_checks_rec(
   goto_functionst::function_mapt::value_type &f,
   const exprt::operandst &guards,
   const exprt &expr,
+  access_typet access_type,
   const namespacet &ns,
   goto_programt &dest)
 {
@@ -76,7 +86,8 @@ void c_safety_checks_rec(
     auto new_guards = guards;
     for(auto &op : expr.operands())
     {
-      c_safety_checks_rec(f, new_guards, op, ns, dest); // rec. call
+      c_safety_checks_rec(
+        f, new_guards, op, access_type, ns, dest); // rec. call
       new_guards.push_back(op);
     }
     return;
@@ -86,7 +97,8 @@ void c_safety_checks_rec(
     auto new_guards = guards;
     for(auto &op : expr.operands())
     {
-      c_safety_checks_rec(f, new_guards, op, ns, dest); // rec. call
+      c_safety_checks_rec(
+        f, new_guards, op, access_type, ns, dest); // rec. call
       new_guards.push_back(not_exprt(op));
     }
     return;
@@ -94,14 +106,16 @@ void c_safety_checks_rec(
   else if(expr.id() == ID_if)
   {
     const auto &if_expr = to_if_expr(expr);
+    c_safety_checks_rec(
+      f, guards, if_expr.cond(), access_typet::R, ns, dest); // rec. call
     auto new_guards = guards;
     new_guards.push_back(if_expr.cond());
     c_safety_checks_rec(
-      f, new_guards, if_expr.true_case(), ns, dest); // rec. call
+      f, new_guards, if_expr.true_case(), access_type, ns, dest); // rec. call
     new_guards.pop_back();
     new_guards.push_back(not_exprt(if_expr.cond()));
     c_safety_checks_rec(
-      f, new_guards, if_expr.false_case(), ns, dest); // rec. call
+      f, new_guards, if_expr.false_case(), access_type, ns, dest); // rec. call
     return;
   }
   else if(expr.id() == ID_forall || expr.id() == ID_exists)
@@ -111,21 +125,30 @@ void c_safety_checks_rec(
 
   // now do operands
   for(auto &op : expr.operands())
-    c_safety_checks_rec(f, guards, op, ns, dest); // rec. call
+    c_safety_checks_rec(f, guards, op, access_type, ns, dest); // rec. call
 
   if(expr.id() == ID_dereference)
   {
-    auto size_opt = pointer_offset_size(expr.type(), ns);
-    if(size_opt.has_value())
+    if(expr.type().id() == ID_code)
     {
-      auto size = from_integer(*size_opt, size_type());
-      auto pointer = to_dereference_expr(expr).pointer();
-      auto condition = r_or_w_ok_exprt(ID_r_ok, pointer, size);
-      auto source_location = expr.source_location();
-      condition.add_source_location() = expr.source_location();
-      source_location.set_property_class("pointer");
-      source_location.set_comment("pointer safe");
-      dest.add(goto_programt::make_assertion(condition, source_location));
+      // dealt with elsewhere
+    }
+    else
+    {
+      auto size_opt = pointer_offset_size(expr.type(), ns);
+      if(size_opt.has_value())
+      {
+        auto size = from_integer(*size_opt, size_type());
+        auto pointer = to_dereference_expr(expr).pointer();
+        auto condition = r_or_w_ok_exprt(
+          access_type == access_typet::W ? ID_w_ok : ID_r_ok, pointer, size);
+        auto source_location = expr.source_location();
+        condition.add_source_location() = expr.source_location();
+        source_location.set_property_class("pointer");
+        auto pointer_text = expr2c(pointer, ns);
+        source_location.set_comment("pointer " + pointer_text + " safe");
+        dest.add(goto_programt::make_assertion(condition, source_location));
+      }
     }
   }
   else if(expr.id() == ID_div)
@@ -139,7 +162,8 @@ void c_safety_checks_rec(
     else
     {
       auto zero = from_integer(0, div_expr.type());
-      auto condition = notequal_exprt(div_expr.divisor(), zero);
+      auto condition = implies_exprt(
+        conjunction(guards), notequal_exprt(div_expr.divisor(), zero));
       auto source_location = expr.source_location();
       condition.add_source_location() = expr.source_location();
       source_location.set_property_class("division-by-zero");
@@ -188,10 +212,18 @@ void c_safety_checks_rec(
 void c_safety_checks(
   goto_functionst::function_mapt::value_type &f,
   const exprt &expr,
+  access_typet access_type,
   const namespacet &ns,
   goto_programt &dest)
 {
-  c_safety_checks_rec(f, {}, expr, ns, dest);
+  c_safety_checks_rec(f, {}, expr, access_type, ns, dest);
+}
+
+static exprt offset_is_zero(const exprt &pointer)
+{
+  auto offset = pointer_offset(pointer);
+  auto zero = from_integer(0, offset.type());
+  return equal_exprt(std::move(offset), std::move(zero));
 }
 
 void c_safety_checks(
@@ -203,9 +235,24 @@ void c_safety_checks(
 
   for(auto it = body.instructions.begin(); it != body.instructions.end(); it++)
   {
-    it->apply([&f, &ns, &dest](const exprt &expr) {
-      c_safety_checks(f, expr, ns, dest);
-    });
+    if(it->is_assign())
+    {
+      c_safety_checks(f, it->assign_lhs(), access_typet::W, ns, dest);
+      c_safety_checks(f, it->assign_rhs(), access_typet::R, ns, dest);
+    }
+    else if(it->is_function_call())
+    {
+      c_safety_checks(f, it->call_lhs(), access_typet::W, ns, dest);
+      c_safety_checks(f, it->call_function(), access_typet::R, ns, dest);
+      for(const auto &argument : it->call_arguments())
+        c_safety_checks(f, argument, access_typet::R, ns, dest);
+    }
+    else
+    {
+      it->apply([&f, &ns, &dest](const exprt &expr) {
+        c_safety_checks(f, expr, access_typet::R, ns, dest);
+      });
+    }
 
     if(it->is_function_call())
     {
@@ -219,18 +266,113 @@ void c_safety_checks(
             it->call_arguments().size() == 1 &&
             it->call_arguments()[0].type().id() == ID_pointer)
           {
-            // Must be dynamically allocated and still alive,
+            // Must be 1) dynamically allocated, 2) still alive, 3) have offset zero,
             // or, alternatively, NULL.
             const auto &pointer = it->call_arguments()[0];
             auto condition = or_exprt(
               equal_exprt(
                 pointer, null_pointer_exprt(to_pointer_type(pointer.type()))),
               and_exprt(
-                live_object_exprt(pointer), is_dynamic_object_exprt(pointer)));
+                live_object_exprt(pointer),
+                is_dynamic_object_exprt(pointer),
+                offset_is_zero(pointer)));
             auto source_location = it->source_location();
             source_location.set_property_class("free");
             source_location.set_comment(
               "free argument must be valid dynamic object");
+            dest.add(goto_programt::make_assertion(condition, source_location));
+          }
+        }
+        else if(identifier == "realloc")
+        {
+          if(
+            it->call_arguments().size() == 2 &&
+            it->call_arguments()[0].type().id() == ID_pointer)
+          {
+            // Must be 1) dynamically allocated, 2) still alive, 3) have offset zero,
+            // or, alternatively, NULL.
+            const auto &pointer = it->call_arguments()[0];
+            auto condition = or_exprt(
+              equal_exprt(
+                pointer, null_pointer_exprt(to_pointer_type(pointer.type()))),
+              and_exprt(
+                live_object_exprt(pointer),
+                is_dynamic_object_exprt(pointer),
+                offset_is_zero(pointer)));
+            auto source_location = it->source_location();
+            source_location.set_property_class("realloc");
+            source_location.set_comment(
+              "realloc argument must be valid dynamic object");
+            dest.add(goto_programt::make_assertion(condition, source_location));
+          }
+        }
+        else if(identifier == "memcmp")
+        {
+          if(
+            it->call_arguments().size() == 3 &&
+            it->call_arguments()[0].type().id() == ID_pointer &&
+            it->call_arguments()[1].type().id() == ID_pointer &&
+            it->call_arguments()[2].type().id() == ID_unsignedbv)
+          {
+            // int memcmp(const void *s1, const void *s2, size_t n);
+            const auto &p1 = it->call_arguments()[0];
+            const auto &p2 = it->call_arguments()[1];
+            const auto &size = it->call_arguments()[2];
+            auto condition =
+              and_exprt(r_ok_exprt(p1, size), r_ok_exprt(p2, size));
+            auto source_location = it->source_location();
+            source_location.set_property_class("memcmp");
+            source_location.set_comment("memcmp regions must be valid");
+            dest.add(goto_programt::make_assertion(condition, source_location));
+          }
+        }
+        else if(identifier == "memchr")
+        {
+          if(
+            it->call_arguments().size() == 3 &&
+            it->call_arguments()[0].type().id() == ID_pointer &&
+            it->call_arguments()[2].type().id() == ID_unsignedbv)
+          {
+            // void *memchr(const void *, int, size_t);
+            const auto &p = it->call_arguments()[0];
+            const auto &size = it->call_arguments()[2];
+            auto condition = r_ok_exprt(p, size);
+            auto source_location = it->source_location();
+            source_location.set_property_class("memchr");
+            source_location.set_comment("memchr source must be valid");
+            dest.add(goto_programt::make_assertion(condition, source_location));
+          }
+        }
+        else if(identifier == "memset")
+        {
+          if(
+            it->call_arguments().size() == 3 &&
+            it->call_arguments()[0].type().id() == ID_pointer &&
+            it->call_arguments()[2].type().id() == ID_unsignedbv)
+          {
+            // void *memset(void *b, int c, size_t len);
+            const auto &pointer = it->call_arguments()[0];
+            const auto &size = it->call_arguments()[2];
+            auto condition = w_ok_exprt(pointer, size);
+            auto source_location = it->source_location();
+            source_location.set_property_class("memset");
+            source_location.set_comment("memset destination must be valid");
+            dest.add(goto_programt::make_assertion(condition, source_location));
+          }
+        }
+        else if(identifier == "__builtin___memset_chk") // clang variant
+        {
+          if(
+            it->call_arguments().size() == 4 &&
+            it->call_arguments()[0].type().id() == ID_pointer &&
+            it->call_arguments()[2].type().id() == ID_unsignedbv)
+          {
+            const auto &pointer = it->call_arguments()[0];
+            const auto &size = it->call_arguments()[2];
+            auto condition = w_ok_exprt(pointer, size);
+            auto source_location = it->source_location();
+            source_location.set_property_class("memset");
+            source_location.set_comment("memset destination must be valid");
             dest.add(goto_programt::make_assertion(condition, source_location));
           }
         }

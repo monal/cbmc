@@ -16,6 +16,7 @@ Author:
 
 #include <solvers/decision_procedure.h>
 
+#include "sentinel_dll.h"
 #include "state.h"
 
 #include <map>
@@ -30,8 +31,9 @@ public:
   axiomst(
     decision_proceduret &__dest,
     const std::unordered_set<symbol_exprt, irep_hash> &__address_taken,
+    bool __verbose,
     const namespacet &__ns)
-    : dest(__dest), address_taken(__address_taken), ns(__ns)
+    : dest(__dest), address_taken(__address_taken), verbose(__verbose), ns(__ns)
   {
   }
 
@@ -42,6 +44,7 @@ public:
 protected:
   decision_proceduret &dest;
   const std::unordered_set<symbol_exprt, irep_hash> &address_taken;
+  bool verbose = false;
   const namespacet &ns;
 
   std::vector<exprt> constraints;
@@ -54,6 +57,8 @@ protected:
   void node(const exprt &);
 
   std::set<address_of_exprt> address_of_exprs;
+
+  std::set<object_address_exprt> object_address_exprs;
 
   std::set<state_ok_exprt> ok_exprs;
   void ok_fc();
@@ -68,11 +73,19 @@ protected:
   void is_dynamic_object_fc();
 
   std::set<state_live_object_exprt> live_object_exprs;
+  void live_object();
   void live_object_fc();
+
+  std::set<state_writeable_object_exprt> writeable_object_exprs;
+  void writeable_object();
+  void writeable_object_fc();
 
   std::set<state_object_size_exprt> object_size_exprs;
   void object_size();
   void object_size_fc();
+
+  std::set<state_is_sentinel_dll_exprt> is_sentinel_dll_exprs;
+  void is_sentinel_dll();
 };
 
 static inline axiomst &operator<<(axiomst &axioms, exprt src)

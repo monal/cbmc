@@ -23,14 +23,18 @@ void propagate(
   const std::vector<framet> &frames,
   const workt &work,
   const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
+  bool verbose,
   const namespacet &ns,
   const std::function<void(const symbol_exprt &, exprt, const workt::patht &)>
     &propagator)
 {
-  std::cout << "PROP";
-  for(const auto &p : work.path)
-    std::cout << ' ' << p.index;
-  std::cout << ": " << format(work.invariant) << '\n';
+  if(verbose)
+  {
+    std::cout << "PROP";
+    for(const auto &p : work.path)
+      std::cout << ' ' << p.index;
+    std::cout << ": " << format(work.invariant) << '\n';
+  }
 
   auto &f = frames[work.frame.index];
 
@@ -43,6 +47,7 @@ void propagate(
     auto simplified1a = simplify_state_expr(simplified1, address_taken, ns);
     if(simplified1 != simplified1a)
     {
+      std::cout << "SIMP0: " << format(instance) << "\n";
       std::cout << "SIMP1: " << format(simplified1) << "\n";
       std::cout << "SIMPa: " << format(simplified1a) << "\n";
       abort();

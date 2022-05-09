@@ -1647,6 +1647,29 @@ void smt2_convt::convert_expr(const exprt &expr)
     convert_expr(to_ternary_expr(expr).op2());
     out << ')';
   }
+  else if(expr.id() == ID_enter_scope_state)
+  {
+    out << "(enter-scope-state-" << type2id(to_binary_expr(expr).op1().type())
+        << ' ';
+    convert_expr(to_binary_expr(expr).op0());
+    out << ' ';
+    convert_expr(to_binary_expr(expr).op1());
+    out << ' ';
+    auto size_opt = size_of_expr(
+      to_pointer_type(to_binary_expr(expr).op1().type()).base_type(), ns);
+    CHECK_RETURN(size_opt.has_value());
+    convert_expr(*size_opt);
+    out << ')';
+  }
+  else if(expr.id() == ID_exit_scope_state)
+  {
+    out << "(exit-scope-state-" << type2id(to_binary_expr(expr).op1().type())
+        << ' ';
+    convert_expr(to_binary_expr(expr).op0());
+    out << ' ';
+    convert_expr(to_binary_expr(expr).op1());
+    out << ')';
+  }
   else if(expr.id() == ID_allocate)
   {
     out << "(allocate ";
@@ -1661,6 +1684,16 @@ void smt2_convt::convert_expr(const exprt &expr)
     convert_expr(to_binary_expr(expr).op0());
     out << ' ';
     convert_expr(to_binary_expr(expr).op1());
+    out << ')';
+  }
+  else if(expr.id() == ID_reallocate)
+  {
+    out << "(reallocate ";
+    convert_expr(to_ternary_expr(expr).op0());
+    out << ' ';
+    convert_expr(to_ternary_expr(expr).op1());
+    out << ' ';
+    convert_expr(to_ternary_expr(expr).op2());
     out << ')';
   }
   else if(expr.id() == ID_deallocate_state)
@@ -1679,6 +1712,79 @@ void smt2_convt::convert_expr(const exprt &expr)
     convert_expr(to_binary_expr(expr).op1());
     out << ')';
   }
+  else if(
+    expr.id() == ID_state_is_cstring ||
+    expr.id() == ID_state_is_dynamic_object ||
+    expr.id() == ID_state_live_object || expr.id() == ID_state_writeable_object)
+  {
+    irep_idt function =
+      expr.id() == ID_state_is_cstring          ? "state-is-cstring"
+      : expr.id() == ID_state_is_dynamic_object ? "state-is-dynamic-object"
+      : expr.id() == ID_state_live_object       ? "state-live-object"
+                                                : "state-writeable-object";
+    out << '(' << function << ' ';
+    convert_expr(to_binary_expr(expr).op0());
+    out << ' ';
+    convert_expr(to_binary_expr(expr).op1());
+    out << ')';
+  }
+  else if(expr.id() == ID_state_is_sentinel_dll)
+  {
+    if(expr.operands().size() == 3)
+    {
+      out << "(state-is-sentinel-dll ";
+      convert_expr(to_multi_ary_expr(expr).op0());
+      out << ' ';
+      convert_expr(to_multi_ary_expr(expr).op1());
+      out << ' ';
+      convert_expr(to_multi_ary_expr(expr).op2());
+      out << ')';
+    }
+    else
+    {
+      out << "(state-is-sentinel-dll-with-node ";
+      convert_expr(to_multi_ary_expr(expr).op0());
+      out << ' ';
+      convert_expr(to_multi_ary_expr(expr).op1());
+      out << ' ';
+      convert_expr(to_multi_ary_expr(expr).op2());
+      out << ' ';
+      convert_expr(to_multi_ary_expr(expr).op3());
+      out << ')';
+    }
+  }
+  else if(expr.id() == ID_state_live_object)
+  {
+    out << "(state-live-object ";
+    convert_expr(to_binary_expr(expr).op0());
+    out << ' ';
+    convert_expr(to_binary_expr(expr).op1());
+    out << ')';
+  }
+  else if(expr.id() == ID_state_writeable_object)
+  {
+    out << "(state-writeable-object ";
+    convert_expr(to_binary_expr(expr).op0());
+    out << ' ';
+    convert_expr(to_binary_expr(expr).op1());
+    out << ')';
+  }
+  else if(
+    expr.id() == ID_state_r_ok || expr.id() == ID_state_w_ok ||
+    expr.id() == ID_state_rw_ok)
+  {
+    const auto f = expr.id() == ID_state_r_ok   ? "state-r-ok"
+                   : expr.id() == ID_state_w_ok ? "state-w-ok"
+                                                : "state-rw-ok";
+
+    out << '(' << f << ' ';
+    convert_expr(to_ternary_expr(expr).op0());
+    out << ' ';
+    convert_expr(to_ternary_expr(expr).op1());
+    out << ' ';
+    convert_expr(to_ternary_expr(expr).op2());
+    out << ')';
+  }
   else if(expr.id() == ID_object_address)
   {
     out << "(object-address ";
@@ -1688,11 +1794,21 @@ void smt2_convt::convert_expr(const exprt &expr)
   }
   else if(expr.id() == ID_element_address)
   {
+    // We turn this binary expression into a ternary expression
+    // by adding the size of the array elements as third argument.
     const auto &element_address_expr = to_element_address_expr(expr);
+
+    auto element_size_expr_opt =
+      ::size_of_expr(element_address_expr.element_type(), ns);
+    CHECK_RETURN(element_size_expr_opt.has_value());
+
     out << "(element-address-" << type2id(expr.type()) << ' ';
     convert_expr(element_address_expr.base());
     out << ' ';
     convert_expr(element_address_expr.index());
+    out << ' ';
+    convert_expr(typecast_exprt::conditional_cast(
+      *element_size_expr_opt, element_address_expr.index().type()));
     out << ')';
   }
   else if(expr.id() == ID_field_address)
@@ -5188,6 +5304,49 @@ void smt2_convt::find_symbols(const exprt &expr)
       out << ")\n";              // declare-fun
     }
   }
+  else if(
+    expr.id() == ID_state_is_cstring ||
+    expr.id() == ID_state_is_dynamic_object ||
+    expr.id() == ID_state_live_object || expr.id() == ID_state_writeable_object)
+  {
+    irep_idt function =
+      expr.id() == ID_state_is_cstring          ? "state-is-cstring"
+      : expr.id() == ID_state_is_dynamic_object ? "state-is-dynamic-object"
+      : expr.id() == ID_state_live_object       ? "state-live-object"
+                                                : "state-writeable-object";
+
+    if(state_fkt_declared.insert(function).second)
+    {
+      out << "(declare-fun " << function << " (";
+      convert_type(to_binary_expr(expr).op0().type());
+      out << ' ';
+      convert_type(to_binary_expr(expr).op1().type());
+      out << ") ";
+      convert_type(expr.type()); // return type
+      out << ")\n";              // declare-fun
+    }
+  }
+  else if(
+    expr.id() == ID_state_r_ok || expr.id() == ID_state_w_ok ||
+    expr.id() == ID_state_rw_ok)
+  {
+    irep_idt function = expr.id() == ID_state_r_ok   ? "state-r-ok"
+                        : expr.id() == ID_state_w_ok ? "state-w-ok"
+                                                     : "state-rw-ok";
+
+    if(state_fkt_declared.insert(function).second)
+    {
+      out << "(declare-fun " << function << " (";
+      convert_type(to_ternary_expr(expr).op0().type());
+      out << ' ';
+      convert_type(to_ternary_expr(expr).op1().type());
+      out << ' ';
+      convert_type(to_ternary_expr(expr).op2().type());
+      out << ") ";
+      convert_type(expr.type()); // return type
+      out << ")\n";              // declare-fun
+    }
+  }
   else if(expr.id() == ID_update_state)
   {
     irep_idt function =
@@ -5206,6 +5365,40 @@ void smt2_convt::find_symbols(const exprt &expr)
       out << ")\n";              // declare-fun
     }
   }
+  else if(expr.id() == ID_enter_scope_state)
+  {
+    irep_idt function =
+      "enter-scope-state-" + type2id(to_binary_expr(expr).op1().type());
+
+    if(state_fkt_declared.insert(function).second)
+    {
+      out << "(declare-fun " << function << " (";
+      convert_type(to_binary_expr(expr).op0().type());
+      out << ' ';
+      convert_type(to_binary_expr(expr).op1().type());
+      out << ' ';
+      convert_type(size_type());
+      out << ") ";
+      convert_type(expr.type()); // return type
+      out << ")\n";              // declare-fun
+    }
+  }
+  else if(expr.id() == ID_exit_scope_state)
+  {
+    irep_idt function =
+      "exit-scope-state-" + type2id(to_binary_expr(expr).op1().type());
+
+    if(state_fkt_declared.insert(function).second)
+    {
+      out << "(declare-fun " << function << " (";
+      convert_type(to_binary_expr(expr).op0().type());
+      out << ' ';
+      convert_type(to_binary_expr(expr).op1().type());
+      out << ") ";
+      convert_type(expr.type()); // return type
+      out << ")\n";              // declare-fun
+    }
+  }
   else if(expr.id() == ID_allocate)
   {
     irep_idt function = "allocate";
@@ -5216,6 +5409,23 @@ void smt2_convt::find_symbols(const exprt &expr)
       convert_type(to_binary_expr(expr).op0().type());
       out << ' ';
       convert_type(to_binary_expr(expr).op1().type());
+      out << ") ";
+      convert_type(expr.type()); // return type
+      out << ")\n";              // declare-fun
+    }
+  }
+  else if(expr.id() == ID_reallocate)
+  {
+    irep_idt function = "reallocate";
+
+    if(state_fkt_declared.insert(function).second)
+    {
+      out << "(declare-fun " << function << " (";
+      convert_type(to_ternary_expr(expr).op0().type());
+      out << ' ';
+      convert_type(to_ternary_expr(expr).op1().type());
+      out << ' ';
+      convert_type(to_ternary_expr(expr).op2().type());
       out << ") ";
       convert_type(expr.type()); // return type
       out << ")\n";              // declare-fun
@@ -5271,6 +5481,8 @@ void smt2_convt::find_symbols(const exprt &expr)
       out << "(declare-fun " << function << " (";
       convert_type(to_element_address_expr(expr).base().type());
       out << ' ';
+      convert_type(to_element_address_expr(expr).index().type());
+      out << ' '; // repeat, for the element size
       convert_type(to_element_address_expr(expr).index().type());
       out << ") ";
       convert_type(expr.type()); // return type
