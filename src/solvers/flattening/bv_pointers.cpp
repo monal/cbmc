@@ -195,13 +195,14 @@ literalt bv_pointerst::convert_rest(const exprt &expr)
       if(same_object_lit.is_false())
         return same_object_lit;
 
+      // The comparison is UNSIGNED, to match the type of pointer_offsett
       return prop.land(
         same_object_lit,
         bv_utils.rel(
           offset_bv0,
           expr.id(),
           offset_bv1,
-          bv_utilst::representationt::SIGNED));
+          bv_utilst::representationt::UNSIGNED));
     }
   }
 
