@@ -168,6 +168,7 @@ extern char *yyansi_ctext;
 %token TOK_GCC_LABEL   "__label__"
 %token TOK_MSC_ASM     "__asm"
 %token TOK_MSC_BASED   "__based"
+%token TOK_CPROVER_VA_ARG "__CPROVER_va_arg"
 %token TOK_CW_VAR_ARG_TYPEOF "_var_arg_typeof"
 %token TOK_BUILTIN_VA_ARG "__builtin_va_arg"
 %token TOK_GCC_BUILTIN_TYPES_COMPATIBLE_P "__builtin_types_compatible_p"
@@ -345,6 +346,7 @@ primary_expression:
         | statement_expression
         | gcc_builtin_expressions
         | clang_builtin_expressions
+        | cprover_builtin_expressions
         | cw_builtin_expressions
         | offsetof
         | quantifier_expression
@@ -415,6 +417,16 @@ clang_builtin_expressions:
         {
           $$=$1;
           parser_stack($$).id(ID_clang_builtin_convertvector);
+          mto($$, $3);
+          parser_stack($$).type().swap(parser_stack($5));
+        }
+        ;
+
+cprover_builtin_expressions:
+          TOK_CPROVER_VA_ARG '(' assignment_expression ',' type_name ')'
+        {
+          $$=$1;
+          parser_stack($$).id(ID_cprover_va_arg);
           mto($$, $3);
           parser_stack($$).type().swap(parser_stack($5));
         }
