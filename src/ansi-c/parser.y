@@ -195,6 +195,7 @@ extern char *yyansi_ctext;
 %token TOK_CPROVER_BITVECTOR "__CPROVER_bitvector"
 %token TOK_CPROVER_FLOATBV "__CPROVER_floatbv"
 %token TOK_CPROVER_FIXEDBV "__CPROVER_fixedbv"
+%token TOK_CPROVER_MAP "__CPROVER_map"
 %token TOK_CPROVER_ATOMIC "__CPROVER_atomic"
 %token TOK_CPROVER_BOOL "__CPROVER_bool"
 %token TOK_CPROVER_THROW "__CPROVER_throw"
@@ -1526,11 +1527,17 @@ elaborated_type_name:
           aggregate_name
         | enum_name
         | array_of_construct
+        | map_type
         ;
         
 array_of_construct:
           TOK_ARRAY_OF '<' type_name '>'
         { $$=$1; stack_type($$).subtype().swap(parser_stack($2)); }
+        ;
+
+map_type:
+          TOK_CPROVER_MAP elaborated_type_name TOK_ARROW elaborated_type_name
+        { $$=$1; mts($$, $2); mts($$, $4); }
         ;
 
 pragma_packed:
