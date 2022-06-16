@@ -113,4 +113,12 @@ void format_hooks()
       return os << "writeable_object(" << format(writeable_object_expr.op0())
                 << ", " << format(writeable_object_expr.op1()) << ')';
     });
+
+  add_format_hook(
+    ID_state_type_compatible,
+    [](std::ostream &os, const exprt &expr) -> std::ostream & {
+      const auto &type_compatible_expr = to_state_type_compatible_expr(expr);
+      return os << "type_compatible(" << format(type_compatible_expr.state())
+                << ", " << format(type_compatible_expr.address()) << ')';
+    });
 }

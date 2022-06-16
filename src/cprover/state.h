@@ -111,8 +111,11 @@ public:
         std::move(new_value),
         state_typet())
   {
-    // PRECONDITION(this->state().id() == ID_state);
+    PRECONDITION(this->state().type().id() == ID_state);
     PRECONDITION(this->address().type().id() == ID_pointer);
+    PRECONDITION(
+      to_pointer_type(this->address().type()).base_type() ==
+      this->new_value().type());
   }
 
   const exprt &state() const
@@ -791,6 +794,80 @@ inline state_ok_exprt &to_state_ok_expr(exprt &expr)
   return ret;
 }
 
+class state_type_compatible_exprt : public binary_exprt
+{
+public:
+  state_type_compatible_exprt(exprt state, exprt address)
+    : binary_exprt(
+        std::move(state),
+        ID_state_type_compatible,
+        std::move(address),
+        bool_typet())
+  {
+    PRECONDITION(this->state().type().id() == ID_state);
+    PRECONDITION(this->address().type().id() == ID_pointer);
+  }
+
+  const exprt &state() const
+  {
+    return op0();
+  }
+
+  exprt &state()
+  {
+    return op0();
+  }
+
+  const exprt &address() const
+  {
+    return op1();
+  }
+
+  exprt &address()
+  {
+    return op1();
+  }
+
+  const typet &access_type() const
+  {
+    return to_pointer_type(address().type()).base_type();
+  }
+
+  // helper
+  state_type_compatible_exprt with_state(exprt state) const
+  {
+    auto result = *this; // copy
+    result.state() = std::move(state);
+    return result;
+  }
+};
+
+/// \brief Cast an exprt to a \ref state_type_compatible_exprt
+///
+/// \a expr must be known to be \ref state_type_compatible_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref state_type_compatible_exprt
+inline const state_type_compatible_exprt &
+to_state_type_compatible_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_state_type_compatible);
+  const state_type_compatible_exprt &ret =
+    static_cast<const state_type_compatible_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_state_type_compatible_expr(const exprt &)
+inline state_type_compatible_exprt &to_state_type_compatible_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_state_type_compatible);
+  state_type_compatible_exprt &ret =
+    static_cast<state_type_compatible_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
 class enter_scope_state_exprt : public binary_exprt
 {
 public:
@@ -823,6 +900,17 @@ public:
   exprt &address()
   {
     return op1();
+  }
+
+  typet object_type() const
+  {
+    return to_pointer_type(address().type()).base_type();
+  }
+
+  symbol_exprt symbol() const
+  {
+    PRECONDITION(address().id() == ID_object_address);
+    return to_object_address_expr(address()).object_expr();
   }
 
 #if 0
@@ -895,6 +983,12 @@ public:
   exprt &address()
   {
     return op1();
+  }
+
+  symbol_exprt symbol() const
+  {
+    PRECONDITION(address().id() == ID_object_address);
+    return to_object_address_expr(address()).object_expr();
   }
 
 #if 0

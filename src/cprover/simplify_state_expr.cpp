@@ -16,6 +16,7 @@ Author:
 #include <util/c_types.h>
 #include <util/expr_util.h>
 #include <util/format_expr.h>
+#include <util/format_type.h>
 #include <util/mathematical_expr.h>
 #include <util/namespace.h>
 #include <util/pointer_offset_size.h>
@@ -38,6 +39,16 @@ exprt simplify_state_expr_node(
   const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
   const namespacet &);
 
+static bool types_are_compatible(const typet &a, const typet &b)
+{
+  if(a == b)
+    return true;
+  else if(a.id() == ID_pointer && b.id() == ID_pointer)
+    return true;
+  else
+    return false;
+}
+
 exprt simplify_evaluate_update(
   evaluate_exprt evaluate_expr,
   const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
@@ -46,6 +57,14 @@ exprt simplify_evaluate_update(
   PRECONDITION(evaluate_expr.state().id() == ID_update_state);
 
   const auto &update_state_expr = to_update_state_expr(evaluate_expr.state());
+
+#if 0
+  std::cout << "U: " << format(update_state_expr) << "\n";
+  std::cout << "u: " << format(update_state_expr.address()) << "\n";
+  std::cout << "T: " << format(update_state_expr.address().type()) << "\n";
+  std::cout << "E: " << format(evaluate_expr.address()) << "\n";
+  std::cout << "T: " << format(evaluate_expr.address().type()) << "\n";
+#endif
 
   auto may_alias = ::may_alias(
     evaluate_expr.address(), update_state_expr.address(), address_taken, ns);
@@ -80,7 +99,7 @@ exprt simplify_evaluate_update(
         evaluate_expr.with_state(update_state_expr.state());
       auto simplified_new_evaluate_expr = simplify_state_expr_node(
         new_evaluate_expr, address_taken, ns); // rec. call
-      return if_exprt(
+      auto if_expr = if_exprt(
         std::move(simplified_cond),
         simplify_state_expr_node(
           typecast_exprt::conditional_cast(
@@ -88,6 +107,7 @@ exprt simplify_evaluate_update(
           address_taken,
           ns),
         std::move(simplified_new_evaluate_expr));
+      return simplify_expr(if_expr, ns);
     }
   }
 
@@ -95,8 +115,9 @@ exprt simplify_evaluate_update(
   auto simplified_new_evaluate_expr =
     simplify_state_expr(new_evaluate_expr, address_taken, ns); // rec. call
 
-  // Types match?
-  if(update_state_expr.new_value().type() == evaluate_expr.type())
+  // Types are compatible?
+  if(types_are_compatible(
+       update_state_expr.new_value().type(), evaluate_expr.type()))
   {
     // Disregard case where the two memory regions overlap.
     //
@@ -127,10 +148,13 @@ exprt simplify_evaluate_update(
     auto simplified_same =
       simplify_state_expr(simplify_expr(same, ns), address_taken, ns);
 
-    return if_exprt(
-      simplified_same,
-      update_state_expr.new_value(),
-      simplified_new_evaluate_expr);
+    auto new_value = typecast_exprt::conditional_cast(
+      update_state_expr.new_value(), evaluate_expr.type());
+
+    auto if_expr =
+      if_exprt(simplified_same, new_value, simplified_new_evaluate_expr);
+
+    return simplify_expr(if_expr, ns);
   }
   else
   {
@@ -314,11 +338,6 @@ exprt simplify_live_object_expr(
       {
         return true_exprt(); // always live
       }
-      else
-      {
-        // might be 'dead'
-        return true_exprt();
-      }
     }
   }
 
@@ -348,32 +367,57 @@ exprt simplify_live_object_expr(
   {
     // This begins the life of a local-scoped variable.
     const auto &enter_scope_state_expr = to_enter_scope_state_expr(src.state());
-    // live_object(enter_scope_state(ς, p), q) -->
-    //   IF same_object(p, q) THEN true ELSE live_object(ς, q) ENDIF
-    auto same_object = ::same_object(object, enter_scope_state_expr.address());
-    auto simplified_same_object =
-      simplify_state_expr(same_object, address_taken, ns);
-    auto new_live_object_expr = simplify_live_object_expr( // rec. call
-      src.with_state(enter_scope_state_expr.state()),
-      address_taken,
-      ns);
-    return if_exprt(simplified_same_object, true_exprt(), new_live_object_expr);
+    if(
+      address_taken.find(enter_scope_state_expr.symbol()) !=
+      address_taken.end())
+    {
+      // live_object(enter_scope_state(ς, p), q) -->
+      //   IF same_object(p, q) THEN true ELSE live_object(ς, q) ENDIF
+      auto same_object =
+        ::same_object(object, enter_scope_state_expr.address());
+      auto simplified_same_object =
+        simplify_state_expr(same_object, address_taken, ns);
+      auto new_live_object_expr = simplify_live_object_expr( // rec. call
+        src.with_state(enter_scope_state_expr.state()),
+        address_taken,
+        ns);
+      return if_exprt(
+        simplified_same_object, true_exprt(), new_live_object_expr);
+    }
+    else
+    {
+      return simplify_live_object_expr( // rec. call
+        src.with_state(enter_scope_state_expr.state()),
+        address_taken,
+        ns);
+    }
   }
   else if(src.state().id() == ID_exit_scope_state)
   {
     // This ends the life of a local-scoped variable.
     const auto &exit_scope_state_expr = to_exit_scope_state_expr(src.state());
-    // live_object(exit_scope_state(ς, p), q) -->
-    //   IF same_object(p, q) THEN false ELSE live_object(ς, q) ENDIF
-    auto same_object = ::same_object(object, exit_scope_state_expr.address());
-    auto simplified_same_object =
-      simplify_state_expr(same_object, address_taken, ns);
-    auto new_live_object_expr = simplify_live_object_expr( // rec. call
-      src.with_state(exit_scope_state_expr.state()),
-      address_taken,
-      ns);
-    return if_exprt(
-      simplified_same_object, false_exprt(), new_live_object_expr);
+    if(
+      address_taken.find(exit_scope_state_expr.symbol()) != address_taken.end())
+    {
+      // live_object(exit_scope_state(ς, p), q) -->
+      //   IF same_object(p, q) THEN false ELSE live_object(ς, q) ENDIF
+      auto same_object = ::same_object(object, exit_scope_state_expr.address());
+      auto simplified_same_object =
+        simplify_state_expr(same_object, address_taken, ns);
+      auto new_live_object_expr = simplify_live_object_expr( // rec. call
+        src.with_state(exit_scope_state_expr.state()),
+        address_taken,
+        ns);
+      return if_exprt(
+        simplified_same_object, false_exprt(), new_live_object_expr);
+    }
+    else
+    {
+      return simplify_live_object_expr( // rec. call
+        src.with_state(exit_scope_state_expr.state()),
+        address_taken,
+        ns);
+    }
   }
 
   return std::move(src);
@@ -483,32 +527,9 @@ exprt simplify_ok_expr(
   const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
   const namespacet &ns)
 {
-  auto &state = src.op0();
-  //auto &pointer = src.op1();
-  //auto &size = src.op2();
-
-#if 0
-  // rewrite X_ok(p, s)
-  //  --> live_object(p) ∧ offset(p)≥0 ∧ offset(p)+s≤object_size(p)
-  auto live_object =
-    binary_predicate_exprt(state, ID_state_live_object, pointer);
-  auto live_object_simplified =
-    simplify_state_expr_node(live_object, address_taken, ns);
-  auto ssize_type = signed_size_type();
-  auto offset = pointer_offset_exprt(pointer, ssize_type);
-  auto offset_simplified = simplify_state_expr_node(offset, address_taken, ns);
-  auto lower = binary_relation_exprt(
-    offset_simplified, ID_ge, from_integer(0, ssize_type));
-  auto object_size =
-    binary_exprt(state, ID_state_object_size, pointer, ssize_type);
-  auto object_size_simplified =
-    simplify_state_expr_node(object_size, address_taken, ns);
-  auto size_casted = typecast_exprt::conditional_cast(size, ssize_type);
-  auto upper = binary_relation_exprt(
-    plus_exprt(offset_simplified, size_casted), ID_le, object_size_simplified);
-
-  return and_exprt(live_object_simplified, lower, upper);
-#endif
+  auto &state = src.state();
+  auto &pointer = src.address();
+  auto &size = src.size();
 
   if(state.id() == ID_update_state)
   {
@@ -521,19 +542,77 @@ exprt simplify_ok_expr(
   }
   else if(state.id() == ID_enter_scope_state)
   {
+    const auto &enter_scope_state_expr = to_enter_scope_state_expr(state);
+
     // rec. call
-    return simplify_state_expr_node(
-      src.with_state(to_enter_scope_state_expr(state).state()),
-      address_taken,
-      ns);
+    auto rec_result = simplify_state_expr_node(
+      src.with_state(enter_scope_state_expr.state()), address_taken, ns);
+
+    // replace array by array[0]
+    auto enter_scope_address =
+      enter_scope_state_expr.object_type().id() == ID_array ?
+        element_address_exprt(enter_scope_state_expr.address(), from_integer(0, to_array_type(enter_scope_state_expr.object_type()).index_type())) :
+        enter_scope_state_expr.address();
+
+    auto may_alias =
+      ::may_alias(enter_scope_address, pointer, address_taken, ns);
+
+    if(may_alias.has_value() && *may_alias == false_exprt())
+      return rec_result;
+
+    auto same_object = ::same_object(pointer, enter_scope_state_expr.address());
+
+    auto simplified_same_object =
+      simplify_state_expr(same_object, address_taken, ns);
+
+    // Known to be live, only need to check upper bound.
+    // Extend one bit, to cover overflow case.
+    auto size_type = ::size_type();
+    auto size_type_ext = unsignedbv_typet(size_type.get_width() + 1);
+    auto offset = pointer_offset_exprt(pointer, size_type_ext);
+    auto size_casted = typecast_exprt(size, size_type_ext);
+    auto object_size_opt =
+      size_of_expr(enter_scope_state_expr.object_type(), ns);
+    if(!object_size_opt.has_value())
+      return std::move(src);
+
+    auto upper = binary_relation_exprt(
+      plus_exprt(offset, size_casted),
+      ID_le,
+      typecast_exprt(*object_size_opt, size_type_ext));
+
+    auto simplified_upper = simplify_state_expr(upper, address_taken, ns);
+
+    auto implication =
+      if_exprt(simplified_same_object, simplified_upper, rec_result);
+
+    return implication;
   }
   else if(state.id() == ID_exit_scope_state)
   {
+#if 0
+    const auto &exit_scope_state_expr = to_exit_scope_state_expr(state);
+
     // rec. call
+    auto rec_result = simplify_state_expr_node(
+      src.with_state(exit_scope_state_expr.state()), address_taken, ns);
+
+    auto same_object = ::same_object(pointer, exit_scope_state_expr.address());
+
+    auto simplified_same_object =
+      simplify_state_expr(same_object, address_taken, ns);
+
+    // Known to be dead if it's the same object.
+    auto implication =
+      if_exprt(simplified_same_object, false_exprt(), rec_result);
+
+    return implication;
+#else
     return simplify_state_expr_node(
       src.with_state(to_exit_scope_state_expr(state).state()),
       address_taken,
       ns);
+#endif
   }
 
   return std::move(src);

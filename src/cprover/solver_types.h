@@ -65,6 +65,11 @@ public:
     }
     exprt lhs;
     function_application_exprt rhs;
+
+    implies_exprt as_expr() const
+    {
+      return implies_exprt(lhs, rhs);
+    }
   };
 
   std::vector<implicationt> implications;
@@ -110,8 +115,23 @@ public:
   statust status = UNKNOWN;
 
   // trace information when REFUTED
-  using patht = std::vector<frame_reft>;
-  patht path;
+  struct trace_updatet
+  {
+    trace_updatet(exprt __address, exprt __value)
+      : address(std::move(__address)), value(std::move(__value))
+    {
+    }
+    exprt address, value;
+  };
+
+  struct trace_statet
+  {
+    frame_reft frame;
+    std::vector<trace_updatet> updates;
+  };
+
+  using tracet = std::vector<trace_statet>;
+  tracet trace;
 };
 
 struct workt
@@ -130,6 +150,8 @@ struct workt
   exprt invariant;
 
   patht path;
+
+  std::size_t nondet_counter = 0;
 };
 
 #endif // CPROVER_CPROVER_SOLVER_TYPES_H

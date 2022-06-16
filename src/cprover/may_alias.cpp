@@ -38,6 +38,26 @@ bool permitted_by_strict_aliasing(const typet &a, const typet &b)
     // signed/unsigned of same width can alias
     return to_bitvector_type(a).get_width() == to_bitvector_type(b).get_width();
   }
+  else if(a.id() == ID_empty)
+    return true; // void * can alias any pointer
+  else if(b.id() == ID_empty)
+    return true; // void * can alias any pointer
+  else if(
+    a.id() == ID_pointer && to_pointer_type(a).base_type().id() == ID_empty)
+    return true; // void * can alias any pointer
+  else if(
+    b.id() == ID_pointer && to_pointer_type(b).base_type().id() == ID_empty)
+    return true; // void * can alias any pointer
+  else if(
+    a.id() == ID_pointer && to_pointer_type(a).base_type().id() == ID_pointer &&
+    to_pointer_type(to_pointer_type(a).base_type()).base_type().id() ==
+      ID_empty)
+    return true; // void * can alias any pointer
+  else if(
+    b.id() == ID_pointer && to_pointer_type(b).base_type().id() == ID_pointer &&
+    to_pointer_type(to_pointer_type(b).base_type()).base_type().id() ==
+      ID_empty)
+    return true; // void * can alias any pointer
   else
   {
     return false;
@@ -103,6 +123,10 @@ static bool stack_and_not_dirty(
       return true; // on the stack, and might alias
     else if(has_prefix(id2string(identifier), "var_args::"))
       return false; // on the stack, but can't take address
+    else if(has_prefix(id2string(identifier), "va_args::"))
+      return false; // on the stack, but can't take address
+    else if(has_prefix(id2string(identifier), "va_arg_array::"))
+      return false; // on the stack, but can't take address
     else if(identifier == "return_value")
       return false; // on the stack, but can't take address
     const auto &symbol = ns.lookup(symbol_expr);
@@ -113,31 +137,27 @@ static bool stack_and_not_dirty(
     return false;
 }
 
-optionalt<exprt> may_alias(
+static exprt drop_pointer_typecasts(exprt src)
+{
+  if(
+    src.id() == ID_typecast &&
+    to_typecast_expr(src).op().type().id() == ID_pointer)
+    return drop_pointer_typecasts(to_typecast_expr(src).op());
+  else
+    return src;
+}
+
+optionalt<exprt> same_address(
   const exprt &a,
   const exprt &b,
-  const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
   const namespacet &ns)
 {
-  PRECONDITION(a.type().id() == ID_pointer);
-  PRECONDITION(b.type().id() == ID_pointer);
-
   static const auto true_expr = true_exprt();
   static const auto false_expr = false_exprt();
 
   // syntactically the same?
-  if(a == b)
+  if(drop_pointer_typecasts(a) == drop_pointer_typecasts(b))
     return true_expr;
-
-  // consider the strict aliasing rule
-  const auto &a_base = to_pointer_type(a.type()).base_type();
-  const auto &b_base = to_pointer_type(b.type()).base_type();
-
-  if(!permitted_by_strict_aliasing(a_base, b_base))
-  {
-    // The object is known to be different, because of strict aliasing.
-    return false_expr;
-  }
 
   // a and b are both object/field/element?
   if(is_object_field_element(a) && is_object_field_element(b))
@@ -158,17 +178,18 @@ optionalt<exprt> may_alias(
       const auto &a_element_address = to_element_address_expr(a);
       const auto &b_element_address = to_element_address_expr(b);
 
-      auto base_may_alias = may_alias(
-        a_element_address.base(), b_element_address.base(), address_taken, ns);
+      // rec. call
+      auto base_same_address = same_address(
+        a_element_address.base(), b_element_address.base(), ns);
 
-      CHECK_RETURN(base_may_alias.has_value());
+      CHECK_RETURN(base_same_address.has_value());
 
-      if(base_may_alias->is_false())
+      if(base_same_address->is_false())
         return false_expr;
       else
       {
         return and_exprt(
-          *base_may_alias,
+          *base_same_address,
           equal_exprt(a_element_address.index(), b_element_address.index()));
       }
     }
@@ -187,14 +208,52 @@ optionalt<exprt> may_alias(
       }
 
       if(a_field_address.component_name() == b_field_address.component_name())
-        return may_alias(
-          a_field_address.base(), b_field_address.base(), address_taken, ns);
+      {
+        // rec. call
+        return same_address(
+          a_field_address.base(), b_field_address.base(), ns);
+      }
       else
         return false_expr;
     }
     else
       return false_expr;
   }
+
+  // don't know
+  return {};
+}
+
+optionalt<exprt> may_alias(
+  const exprt &a,
+  const exprt &b,
+  const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
+  const namespacet &ns)
+{
+  PRECONDITION(a.type().id() == ID_pointer);
+  PRECONDITION(b.type().id() == ID_pointer);
+
+  static const auto true_expr = true_exprt();
+  static const auto false_expr = false_exprt();
+
+  // syntactically the same?
+  if(drop_pointer_typecasts(a) == drop_pointer_typecasts(b))
+    return true_expr;
+
+  // consider the strict aliasing rule
+  const auto &a_base = to_pointer_type(a.type()).base_type();
+  const auto &b_base = to_pointer_type(b.type()).base_type();
+
+  if(!permitted_by_strict_aliasing(a_base, b_base))
+  {
+    // The object is known to be different, because of strict aliasing.
+    return false_expr;
+  }
+
+  // a and b the same addresses?
+  auto same_address_opt = same_address(a, b, ns);
+  if(same_address_opt.has_value())
+    return same_address_opt;
 
   // is one of them stack-allocated and it's address is not taken?
   if(stack_and_not_dirty(a, address_taken, ns))

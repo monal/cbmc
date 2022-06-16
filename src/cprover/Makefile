@@ -8,6 +8,7 @@ SRC = address_taken.cpp \
       counterexample_found.cpp \
       equality_propagation.cpp \
       find_variables.cpp \
+      flatten_ok_expr.cpp \
       format_hooks.cpp \
       free_symbols.cpp \
       help_formatter.cpp \
@@ -16,6 +17,7 @@ SRC = address_taken.cpp \
       may_alias.cpp \
       propagate.cpp \
       report_properties.cpp \
+      report_traces.cpp \
       sentinel_dll.cpp \
       simplify_state_expr.cpp \
       state.cpp \

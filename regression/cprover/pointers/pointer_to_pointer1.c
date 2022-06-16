@@ -1,10 +1,12 @@
 #include <stdlib.h>
 
+int *p;
+void **p_ptr;
+
 int main()
 {
-  int *p;
   p = malloc(1);
-  void **q = &p;
-  void *new_mem = malloc(1);
-  free(*q);
+  p_ptr = &p;
+  __CPROVER_assert(__CPROVER_LIVE_OBJECT(*p_ptr), "property 1");
+  return 0;
 }

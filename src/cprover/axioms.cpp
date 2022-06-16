@@ -171,6 +171,8 @@ void axiomst::writeable_object()
       continue;
     else if(has_prefix(id2string(a_it->object_identifier()), "va_arg::"))
       continue;
+    else if(has_prefix(id2string(a_it->object_identifier()), "va_arg_array::"))
+      continue;
 
     auto &symbol = ns.lookup(a_it->object_expr());
     bool is_const = symbol.type.get_bool(ID_C_constant);
@@ -314,6 +316,15 @@ void axiomst::ok_fc()
       dest << replace(implication);
     }
   }
+}
+
+exprt axiomst::translate(exprt src) const
+{
+  auto r = replacement_map.find(src);
+  if(r == replacement_map.end())
+    return src;
+  else
+    return r->second;
 }
 
 exprt axiomst::replace(exprt src)

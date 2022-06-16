@@ -20,7 +20,7 @@ class namespacet;
 
 bool is_object_field_element(const exprt &);
 
-// check whether to addresses are the same
+// check whether the given two addresses may be aliases
 optionalt<exprt> may_alias(
   const exprt &,
   const exprt &,

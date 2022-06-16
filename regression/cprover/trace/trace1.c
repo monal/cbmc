@@ -1,10 +1,12 @@
-int x, y;
-
 int main()
 {
-  x = 1;
-  y = 2;
-  x = 3;
-  __CPROVER_assert(0, "property 1");
-  return 0;
+  int x, y;
+
+  y = 0;
+
+  if(x > y)
+  {
+    x++;
+    __CPROVER_assert(x > y, "property 1"); // fails
+  }
 }

@@ -187,7 +187,8 @@ exprt state_encodingt::replace_nondet_rec(
     {
       // return address of va_args array
       return typecast_exprt::conditional_cast(
-        object_address_exprt(va_args(function_identifier)), what.type());
+        evaluate_expr(loc, state_expr(), va_args(function_identifier)),
+        what.type());
     }
     else
       return what; // leave it
@@ -576,8 +577,14 @@ exprt state_encodingt::assignment_constraint(loct loc, exprt lhs, exprt rhs)
   auto new_state =
     assignment_constraint_rec(loc, state_expr(), lhs, rhs, nondet_symbols);
 
-  return forall_states_expr(
-    loc, function_application_exprt(out_state_expr(loc), {new_state}));
+  forall_exprt::variablest binding = {state_expr()};
+  binding.insert(binding.end(), nondet_symbols.begin(), nondet_symbols.end());
+
+  return forall_exprt(
+    std::move(binding),
+    implies_exprt(
+      function_application_exprt(in_state_expr(loc), {state_expr()}),
+      function_application_exprt(out_state_expr(loc), {new_state})));
 }
 
 void state_encodingt::setup_incoming(const goto_functiont &goto_function)
@@ -646,7 +653,7 @@ void state_encodingt::function_call_symbol(
     auto size_evaluated = evaluate_expr(loc, state, loc->call_arguments()[0]);
 
     auto lhs_address = address_rec(loc, state, loc->call_lhs());
-    auto lhs_type = to_pointer_type(lhs_address.type());
+    auto lhs_type = to_pointer_type(loc->call_lhs().type());
     exprt new_state = update_state_exprt(
       state, lhs_address, allocate_exprt(state, size_evaluated, lhs_type));
     dest << forall_states_expr(
@@ -662,7 +669,8 @@ void state_encodingt::function_call_symbol(
     PRECONDITION(loc->call_arguments().size() == 3);
     auto memptr_evaluated = evaluate_expr(loc, state, loc->call_arguments()[0]);
     auto size_evaluated = evaluate_expr(loc, state, loc->call_arguments()[2]);
-    auto lhs_type = pointer_type(empty_typet());
+    auto lhs_type =
+      to_pointer_type(to_pointer_type(memptr_evaluated.type()).base_type());
     exprt new_state = update_state_exprt(
       state, memptr_evaluated, allocate_exprt(state, size_evaluated, lhs_type));
     dest << forall_states_expr(
@@ -680,7 +688,7 @@ void state_encodingt::function_call_symbol(
     auto size_evaluated = evaluate_expr(loc, state, loc->call_arguments()[1]);
 
     auto lhs_address = address_rec(loc, state, loc->call_lhs());
-    auto lhs_type = to_pointer_type(lhs_address.type());
+    auto lhs_type = to_pointer_type(loc->call_lhs().type());
     exprt new_state = update_state_exprt(
       state,
       lhs_address,
@@ -756,6 +764,7 @@ void state_encodingt::function_call_symbol(
     if(arguments.size() > type.parameters().size())
     {
       std::vector<exprt> va_args_elements;
+      auto void_ptr = pointer_type(empty_typet());
 
       for(std::size_t i = type.parameters().size(); i < arguments.size(); i++)
       {
@@ -766,8 +775,8 @@ void state_encodingt::function_call_symbol(
         auto address =
           object_address_exprt(symbol_exprt(id, arguments[i].type()));
         auto value = evaluate_expr(loc, state_expr(), arguments[i]);
-        va_args_elements.push_back(typecast_exprt::conditional_cast(
-          address, pointer_type(empty_typet())));
+        va_args_elements.push_back(
+          typecast_exprt::conditional_cast(address, void_ptr));
         arguments_state = update_state_exprt(arguments_state, address, value);
       }
 
@@ -783,7 +792,8 @@ void state_encodingt::function_call_symbol(
       {
         auto address = element_address_exprt(
           object_address_exprt(array_symbol),
-          from_integer(i, array_type.index_type()));
+          from_integer(i, array_type.index_type()),
+          pointer_type(void_ptr));
         auto value = va_args_elements[i];
         arguments_state = update_state_exprt(arguments_state, address, value);
       }
@@ -792,7 +802,8 @@ void state_encodingt::function_call_symbol(
       auto address = object_address_exprt(va_args(identifier));
       auto value = element_address_exprt(
         object_address_exprt(array_symbol),
-        from_integer(0, array_type.index_type()));
+        from_integer(0, array_type.index_type()),
+        pointer_type(void_ptr));
       arguments_state = update_state_exprt(arguments_state, address, value);
     }
 

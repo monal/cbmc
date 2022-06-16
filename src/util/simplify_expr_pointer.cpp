@@ -359,7 +359,7 @@ simplify_exprt::simplify_pointer_offset(const pointer_offset_exprt &expr)
 
     // this might change the type of the pointer!
     exprt pointer_offset_expr = simplify_pointer_offset(
-      to_pointer_offset_expr(pointer_offset(ptr_expr.front())));
+      to_pointer_offset_expr(pointer_offset_exprt(ptr_expr.front(), expr.type())));
 
     exprt sum;
 

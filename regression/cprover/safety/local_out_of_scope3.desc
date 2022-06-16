@@ -1,0 +1,7 @@
+KNOWNBUG
+local_out_of_scope3.c
+
+^EXIT=10$
+^SIGNAL=0$
+^\[main\.pointer\.1\] line \d+ pointer p safe: SUCCESS$
+--
