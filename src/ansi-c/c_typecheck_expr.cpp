@@ -2411,8 +2411,7 @@ exprt c_typecheck_baset::do_special_functions(
       throw 0;
     }
 
-    predicate_exprt is_cstring_expr("is_cstring");
-    is_cstring_expr.operands()=expr.arguments();
+    is_cstring_exprt is_cstring_expr(expr.arguments()[0]);
     is_cstring_expr.add_source_location()=source_location;
 
     return std::move(is_cstring_expr);
