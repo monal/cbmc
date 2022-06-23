@@ -142,12 +142,12 @@ void c_safety_checks_rec(
         auto pointer = to_dereference_expr(expr).pointer();
         auto condition = r_or_w_ok_exprt(
           access_type == access_typet::W ? ID_w_ok : ID_r_ok, pointer, size);
-        auto source_location = expr.source_location();
         condition.add_source_location() = expr.source_location();
-        source_location.set_property_class("pointer");
+        auto assertion_source_location = expr.source_location();
+        assertion_source_location.set_property_class("pointer");
         auto pointer_text = expr2c(pointer, ns);
-        source_location.set_comment("pointer " + pointer_text + " safe");
-        dest.add(goto_programt::make_assertion(condition, source_location));
+        assertion_source_location.set_comment("pointer " + pointer_text + " safe");
+        dest.add(goto_programt::make_assertion(condition, assertion_source_location));
       }
     }
   }
@@ -357,6 +357,20 @@ void c_safety_checks(
             auto source_location = it->source_location();
             source_location.set_property_class("memset");
             source_location.set_comment("memset destination must be valid");
+            dest.add(goto_programt::make_assertion(condition, source_location));
+          }
+        }
+        else if(identifier == "strlen")
+        {
+          if(
+            it->call_arguments().size() == 1 &&
+            it->call_arguments()[0].type().id() == ID_pointer)
+          {
+            const auto &address = it->call_arguments()[0];
+            auto condition = is_cstring_exprt(address);
+            auto source_location = it->source_location();
+            source_location.set_property_class("strlen");
+            source_location.set_comment("strlen argument must be C string");
             dest.add(goto_programt::make_assertion(condition, source_location));
           }
         }

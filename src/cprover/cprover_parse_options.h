@@ -18,7 +18,8 @@ Author: Daniel Kroening, dkr@amazon.com
   "(help)?h(version)"                                                          \
   "(smt2)(text)(outfile):"                                                     \
   "(variables)"                                                                \
-  "(safety)(no-assertions)"                                                    \
+  "(safety)(no-safety)(no-assertions)"                                         \
+  "(contract):"                                                                \
   "(solve)(unwind):(trace)"                                                    \
   "(inline)(no-inline)"                                                        \
   "D:I:"                                                                       \

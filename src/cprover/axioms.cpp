@@ -173,6 +173,8 @@ void axiomst::writeable_object()
       continue;
     else if(has_prefix(id2string(a_it->object_identifier()), "va_arg_array::"))
       continue;
+    else if(has_prefix(id2string(a_it->object_identifier()), "old::"))
+      continue;
 
     auto &symbol = ns.lookup(a_it->object_expr());
     bool is_const = symbol.type.get_bool(ID_C_constant);
@@ -318,6 +320,32 @@ void axiomst::ok_fc()
   }
 }
 
+void axiomst::initial_state()
+{
+  for(const auto &initial_state_expr : initial_state_exprs)
+  {
+    // initial_state(ς) -> ¬live_object(ς, o)   for any stack-allocated object o
+    for(const auto &object : address_taken)
+    {
+      const symbolt *symbol;
+      if(ns.lookup(object.get_identifier(), symbol))
+        continue;
+
+      if(symbol->is_static_lifetime || !symbol->is_lvalue)
+        continue;
+
+      auto live_object = state_live_object_exprt(
+        initial_state_expr.op(), object_address_exprt(object));
+      live_object_exprs.insert(live_object);
+      auto implication =
+        implies_exprt(initial_state_expr, not_exprt(live_object));
+      if(verbose)
+        std::cout << "INITIAL_STATE: " << format(implication) << '\n';
+      dest << replace(implication);
+    }
+  }
+}
+
 exprt axiomst::translate(exprt src) const
 {
   auto r = replacement_map.find(src);
@@ -332,8 +360,8 @@ exprt axiomst::replace(exprt src)
   src.type() = replace(src.type());
 
   if(
-    src.id() == ID_evaluate || src.id() == ID_state_is_cstring ||
-    src.id() == ID_state_is_sentinel_dll || 
+    src.id() == ID_initial_state || src.id() == ID_evaluate ||
+    src.id() == ID_state_is_cstring || src.id() == ID_state_is_sentinel_dll ||
     src.id() == ID_state_is_dynamic_object ||
     src.id() == ID_state_object_size || src.id() == ID_state_live_object ||
     src.id() == ID_state_writeable_object || src.id() == ID_state_r_ok ||
@@ -626,6 +654,10 @@ void axiomst::node(const exprt &src)
     const auto &object_size_expr = to_state_object_size_expr(src);
     object_size_exprs.insert(object_size_expr);
   }
+  else if(src.id() == ID_initial_state)
+  {
+    initial_state_exprs.insert(to_initial_state_expr(src));
+  }
   else if(
     src.id() == ID_state_r_ok || src.id() == ID_state_w_ok ||
     src.id() == ID_state_rw_ok)
@@ -709,13 +741,17 @@ void axiomst::emit()
 
     auto constraint_replaced = replace(constraint);
     if(verbose)
-      std::cout << "CONSTRAINT: " << format(constraint_replaced) << "\n";
+    {
+      std::cout << "CONSTRAINT1: " << format(constraint) << "\n";
+      std::cout << "CONSTRAINT2: " << format(constraint_replaced) << "\n";
+    }
     dest << constraint_replaced;
   }
 
   object_size();
   live_object();
   writeable_object();
+  initial_state();
 
   // functional consistency is done last
   evaluate_fc();

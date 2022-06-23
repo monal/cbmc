@@ -1,4 +1,4 @@
-void foo(int *p) __CPROVER_requires(__CPROVER_w_ok(p))
+void foo(int *p) __CPROVER_requires(__CPROVER_w_ok(p)) __CPROVER_assigns(*p)
 {
   int i;
 

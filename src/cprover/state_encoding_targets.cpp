@@ -24,6 +24,17 @@ void ascii_encoding_targett::set_to_true(source_locationt, exprt expr)
 
 void state_encoding_smt2_convt::add_converters()
 {
+#if 0
+  auto make_unary = [this](const char *f) {
+    return [this, f](const exprt &expr) {
+      const auto &unary_expr = to_unary_expr(expr);
+      out << '(' << f << ' ';
+      convert_expr(unary_expr.op());
+      out << ')';
+    };
+  };
+#endif
+
   auto make_binary = [this](const char *f) {
     return [this, f](const exprt &expr) {
       const auto &binary_expr = to_binary_expr(expr);
@@ -125,6 +136,10 @@ void state_encoding_smt2_convt::add_converters()
   });
 
   set_converter(ID_state_is_cstring, make_binary("state-is-cstring"));
+
+  set_converter(ID_initial_state, [this](const exprt &expr) {
+    out << "true";
+  });
 
   set_converter(
     ID_state_is_dynamic_object, make_binary("state-is-dynamic-object"));

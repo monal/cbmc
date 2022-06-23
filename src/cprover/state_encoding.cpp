@@ -895,7 +895,8 @@ void state_encodingt::operator()(
   dest << forall_exprt(
     {state_expr()},
     implies_exprt(
-      true_exprt(), function_application_exprt(in_state, {state_expr()})));
+      initial_state_exprt(state_expr()),
+      function_application_exprt(in_state, {state_expr()})));
 
   auto annotation = id2string(f_entry->first);
 
@@ -1100,6 +1101,7 @@ void state_encodingt::encode(
 void state_encoding(
   const goto_modelt &goto_model,
   bool program_is_inlined,
+  optionalt<irep_idt> contract,
   encoding_targett &dest)
 {
   if(program_is_inlined)
@@ -1113,6 +1115,26 @@ void state_encoding(
     dest.annotation("function " + id2string(f_entry->first));
 
     state_encodingt{goto_model}(f_entry, dest);
+  }
+  else if(contract.has_value())
+  {
+    // check given contract
+    const namespacet ns(goto_model.symbol_table);
+    const symbolt *symbol;
+    if(ns.lookup(*contract, symbol))
+      throw invalid_command_line_argument_exceptiont(
+        "The given function was not found", "contract");
+
+    if(!has_contract(to_code_with_contract_type(symbol->type)))
+      throw invalid_command_line_argument_exceptiont(
+        "The given function has no contract", "contract");
+
+    const auto f = goto_model.goto_functions.function_map.find(symbol->name);
+    CHECK_RETURN(f != goto_model.goto_functions.function_map.end());
+
+    dest.annotation("");
+    dest.annotation("function " + id2string(symbol->name));
+    state_encodingt{goto_model}(f, dest);
   }
   else
   {
@@ -1145,6 +1167,7 @@ void state_encoding(
   const goto_modelt &goto_model,
   state_encoding_formatt state_encoding_format,
   bool program_is_inlined,
+  optionalt<irep_idt> contract,
   std::ostream &out)
 {
   switch(state_encoding_format)
@@ -1153,7 +1176,7 @@ void state_encoding(
   {
     format_hooks();
     ascii_encoding_targett dest(out);
-    state_encoding(goto_model, program_is_inlined, dest);
+    state_encoding(goto_model, program_is_inlined, contract, dest);
   }
   break;
 
@@ -1161,7 +1184,7 @@ void state_encoding(
   {
     const namespacet ns(goto_model.symbol_table);
     smt2_encoding_targett dest(ns, out);
-    state_encoding(goto_model, program_is_inlined, dest);
+    state_encoding(goto_model, program_is_inlined, contract, dest);
   }
   break;
   }
@@ -1177,7 +1200,7 @@ void variable_encoding(
   format_hooks();
 
   container_encoding_targett container;
-  state_encoding(goto_model, true, container);
+  state_encoding(goto_model, true, {}, container);
 
   equality_propagation(container.constraints);
 
@@ -1204,6 +1227,7 @@ void variable_encoding(
 solver_resultt state_encoding_solver(
   const goto_modelt &goto_model,
   bool program_is_inlined,
+  optionalt<irep_idt> contract,
   const solver_optionst &solver_options)
 {
   const namespacet ns(goto_model.symbol_table);
@@ -1211,7 +1235,7 @@ solver_resultt state_encoding_solver(
   format_hooks();
 
   container_encoding_targett container;
-  state_encoding(goto_model, program_is_inlined, container);
+  state_encoding(goto_model, program_is_inlined, contract, container);
 
   equality_propagation(container.constraints);
 

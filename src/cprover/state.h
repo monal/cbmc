@@ -30,6 +30,50 @@ static inline symbol_exprt state_expr()
   return symbol_exprt(u8"\u03c2", state_typet());
 }
 
+class initial_state_exprt : public unary_predicate_exprt
+{
+public:
+  explicit initial_state_exprt(exprt state)
+    : unary_predicate_exprt(ID_initial_state, std::move(state))
+  {
+    PRECONDITION(this->state().type().id() == ID_state);
+  }
+
+  const exprt &state() const
+  {
+    return op();
+  }
+
+  exprt &state()
+  {
+    return op();
+  }
+};
+
+/// \brief Cast an exprt to a \ref initial_state_exprt
+///
+/// \a expr must be known to be \ref initial_state_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref initial_state_exprt
+inline const initial_state_exprt &to_initial_state_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_initial_state);
+  const initial_state_exprt &ret =
+    static_cast<const initial_state_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_initial_state_expr(const exprt &)
+inline initial_state_exprt &to_initial_state_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_initial_state);
+  initial_state_exprt &ret = static_cast<initial_state_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
 class evaluate_exprt : public binary_exprt
 {
 public:

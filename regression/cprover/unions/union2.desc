@@ -1,5 +1,5 @@
-CORE
-struct_pointer6.c
+KNOWNBUG
+union2.c
 
 ^EXIT=0$
 ^SIGNAL=0$

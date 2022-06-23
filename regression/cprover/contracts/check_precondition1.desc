@@ -3,6 +3,6 @@ check_precondition1.c
 
 ^EXIT=10$
 ^SIGNAL=0$
-^\[main\.precondition\.1\] line \d+ precondition my_function: REFUTED$
-^\[main\.precondition\.2\] line \d+ precondition my_function: SUCCESS$
+^\[main\.precondition\.1\] line \d+ my_function precondition .*: REFUTED$
+^\[main\.precondition\.2\] line \d+ my_function precondition .*: SUCCESS$
 --

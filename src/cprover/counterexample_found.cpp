@@ -157,7 +157,7 @@ optionalt<propertyt::tracet> counterexample_found(
 
   for(const auto &implication : f.implications)
   {
-    if(implication.lhs.is_true())
+    if(implication.lhs.id() == ID_initial_state)
     {
       cout_message_handlert message_handler;
       message_handler.set_verbosity(verbose ? 10 : 1);
@@ -165,9 +165,10 @@ optionalt<propertyt::tracet> counterexample_found(
       bv_pointers_widet solver(ns, satcheck, message_handler);
       axiomst axioms(solver, address_taken, verbose, ns);
 
-      // These are initial states, i.e., true ⇒ SInitial(ς).
+      // These are initial states, i.e., initial_state(ς) ⇒ SInitial(ς).
       // Ask the solver whether the invariant is 'true'.
       axioms.set_to_false(work.invariant);
+      axioms.set_to_true(implication.lhs);
       axioms.emit();
 
       switch(solver())

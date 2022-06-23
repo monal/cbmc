@@ -3,7 +3,7 @@ basic1.c
 --text --solve --inline
 ^EXIT=0$
 ^SIGNAL=0$
-^ \(\d+\) ∀ ς : state \. true ⇒ SInitial\(ς\)$
+^ \(\d+\) ∀ ς : state \. initial_state\(ς\) ⇒ SInitial\(ς\)$
 ^ \(\d+\) S0 = SInitial$
 ^\(\d+\) ∀ ς : state \. S17\(ς\) ⇒ S18\(ς\[❝x❞:=0\]\)$
 ^\(\d+\) ∀ ς : state \. S20\(ς\) ⇒ S21\(ς\[❝x❞:=1\]\)$

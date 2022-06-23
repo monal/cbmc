@@ -5148,6 +5148,19 @@ void smt2_convt::find_symbols(const exprt &expr)
       out << ")\n"; // define-fun
     }
   }
+  else if(expr.id() == ID_initial_state)
+  {
+    irep_idt function = "initial-state";
+
+    if(state_fkt_declared.insert(function).second)
+    {
+      out << "(declare-fun " << function << " (";
+      convert_type(to_unary_expr(expr).op().type());
+      out << ") ";
+      convert_type(expr.type()); // return type
+      out << ")\n";              // declare-fun
+    }
+  }
   else if(expr.id() == ID_evaluate)
   {
     irep_idt function = "evaluate-" + type2id(expr.type());

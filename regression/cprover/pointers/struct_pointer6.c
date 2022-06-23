@@ -5,7 +5,7 @@ struct buf {
 int main()
 {
   struct buf *b;
-  __CPROVER_assume(__CPROVER_r_ok(b));
+  __CPROVER_assume(__CPROVER_r_ok(b)); // must not alias with x
   __CPROVER_assume(b->len == 456);
 
   __CPROVER_size_t x, *size_t_ptr = &x;

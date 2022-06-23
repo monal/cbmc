@@ -215,6 +215,12 @@ int cprover_parse_optionst::main()
       return CPROVER_EXIT_SUCCESS;
     }
 
+    optionalt<irep_idt> contract;
+    if(cmdline.isset("contract"))
+      contract = irep_idt(cmdline.get_value("contract"));
+    else
+      contract = {};
+
     if(cmdline.isset("smt2") || cmdline.isset("text") || variable_encoding)
     {
       auto format = cmdline.isset("smt2") ? state_encoding_formatt::SMT2
@@ -237,7 +243,7 @@ int cprover_parse_optionst::main()
         if(variable_encoding)
           ::variable_encoding(goto_model, format, out);
         else
-          state_encoding(goto_model, format, perform_inlining, out);
+          state_encoding(goto_model, format, perform_inlining, contract, out);
 
         std::cout << "formula written to " << file_name << '\n';
       }
@@ -246,7 +252,8 @@ int cprover_parse_optionst::main()
         if(variable_encoding)
           ::variable_encoding(goto_model, format, std::cout);
         else
-          state_encoding(goto_model, format, perform_inlining, std::cout);
+          state_encoding(
+            goto_model, format, perform_inlining, contract, std::cout);
       }
 
       if(!cmdline.isset("solve"))
@@ -266,8 +273,8 @@ int cprover_parse_optionst::main()
     solver_options.verbose = cmdline.isset("verbose");
 
     // solve
-    auto result =
-      state_encoding_solver(goto_model, perform_inlining, solver_options);
+    auto result = state_encoding_solver(
+      goto_model, perform_inlining, contract, solver_options);
 
     switch(result)
     {
@@ -312,6 +319,7 @@ void cprover_parse_optionst::help()
     "Other options:\n"
     " {y--inline} \t perform function call inlining before\n"
     " \t generating the formula\n"
+    " {y--contract} function \t check contract of given function\n"
     " {y--outfile} {ufile-name} \t set output file for formula\n"
     " {y--smt2} \t output formula in SMT-LIB2 format\n"
     " {y--text} \t output formula in text format\n"

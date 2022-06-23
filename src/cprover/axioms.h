@@ -88,6 +88,9 @@ protected:
 
   std::set<state_is_sentinel_dll_exprt> is_sentinel_dll_exprs;
   void is_sentinel_dll();
+
+  std::set<initial_state_exprt> initial_state_exprs;
+  void initial_state();
 };
 
 static inline axiomst &operator<<(axiomst &axioms, exprt src)
