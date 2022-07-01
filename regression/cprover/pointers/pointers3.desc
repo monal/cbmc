@@ -1,6 +1,6 @@
 CORE
 pointers3.c
---text --solve --inline
+--text --solve --inline --no-safety
 ^EXIT=0$
 ^SIGNAL=0$
 ^\(\d+\) ∀ ς : state \. \(S20\(ς\) ∧ ς\(ς\(❝main::1::p❞\)\) = 10\) ⇒ S21\(ς\)$

@@ -1,6 +1,6 @@
 CORE
 pointers8.c
---text --solve --inline
+--text --solve --inline --no-safety
 ^EXIT=0$
 ^SIGNAL=0$
 ^\(\d+\) ∀ ς : state \. S20\(ς\) ⇒ S21\(ς\[ς\(❝main::1::p❞\):=123\]\)$

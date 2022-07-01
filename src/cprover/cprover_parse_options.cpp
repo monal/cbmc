@@ -142,10 +142,10 @@ int cprover_parse_optionst::main()
         ? static_cast<message_handlert &>(message_handler)
         : static_cast<message_handlert &>(null_message_handler);
 
+    const bool safety = !cmdline.isset("no-safety");
+
     remove_function_pointers(
-      remove_function_pointers_message_handler,
-      goto_model,
-      cmdline.isset("safety"));
+      remove_function_pointers_message_handler, goto_model, safety);
 
     adjust_float_expressions(goto_model);
     instrument_given_invariants(goto_model);
@@ -164,7 +164,7 @@ int cprover_parse_optionst::main()
     if(!perform_inlining)
       instrument_contracts(goto_model);
 
-    if(cmdline.isset("safety"))
+    if(safety)
       c_safety_checks(goto_model);
 
     if(cmdline.isset("no-assertions"))
@@ -319,7 +319,8 @@ void cprover_parse_optionst::help()
     "Other options:\n"
     " {y--inline} \t perform function call inlining before\n"
     " \t generating the formula\n"
-    " {y--contract} function \t check contract of given function\n"
+    " {y--no-safety} \t disable safety checks\n"
+    " {y--contract} {ufunction} \t check contract of given function\n"
     " {y--outfile} {ufile-name} \t set output file for formula\n"
     " {y--smt2} \t output formula in SMT-LIB2 format\n"
     " {y--text} \t output formula in text format\n"

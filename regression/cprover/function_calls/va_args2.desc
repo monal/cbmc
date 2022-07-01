@@ -1,4 +1,4 @@
-CORE
+KNOWNBUG
 va_args2.c
 
 ^EXIT=0$
