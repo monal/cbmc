@@ -1,4 +1,4 @@
-KNOWNBUG
+CORE
 check_assigns4.c
 
 ^EXIT=10$

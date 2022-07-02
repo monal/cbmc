@@ -13,6 +13,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <util/c_types.h>
 #include <util/format_expr.h>
+#include <util/pointer_predicates.h>
 #include <util/prefix.h>
 #include <util/replace_symbol.h>
 #include <util/std_code.h>
@@ -44,16 +45,6 @@ static exprt make_address(exprt src)
     return address_of_exprt(src);
 }
 
-static bool is_symbol_member(const exprt &expr)
-{
-  if(expr.id() == ID_symbol)
-    return true;
-  else if(expr.id() == ID_member)
-    return is_symbol_member(to_member_expr(expr).struct_op());
-  else
-    return false;
-}
-
 // add the function to the source location
 exprt add_function(irep_idt function_identifier, exprt src)
 {
@@ -78,19 +69,52 @@ exprt replace_source_location(
   return src;
 }
 
+static bool is_symbol_member(const exprt &expr)
+{
+  if(expr.id() == ID_symbol)
+    return true;
+  else if(expr.id() == ID_member)
+    return is_symbol_member(to_member_expr(expr).struct_op());
+  else
+    return false;
+}
+
+exprt assigns_match(const exprt &assigns, const exprt &lhs)
+{
+  if(is_symbol_member(lhs) && assigns == lhs)
+    return true_exprt(); // trivial match
+
+  if(lhs.id() == ID_member)
+  {
+    if(assigns_match(assigns, to_member_expr(lhs).struct_op()).is_true())
+      return true_exprt();
+  }
+  else if(lhs.id() == ID_index)
+  {
+    if(assigns_match(assigns, to_index_expr(lhs).array()).is_true())
+      return true_exprt();
+  }
+
+  auto assigns_address = make_address(assigns);
+  auto lhs_address = make_address(lhs);
+
+  if(lhs.type() == assigns.type())
+  {
+    return equal_exprt(assigns_address, lhs_address);
+  }
+  else
+  {
+    // need to compare offset ranges
+    auto same_object = ::same_object(assigns_address, lhs_address);
+    return same_object;
+  }
+}
+
 static exprt make_assigns_assertion(
   irep_idt function_identifier,
   const exprt::operandst &assigns,
   const exprt &lhs)
 {
-  // trivial match?
-  if(is_symbol_member(lhs))
-  {
-    for(auto &a : assigns)
-      if(lhs == a)
-        return true_exprt();
-  }
-
   exprt::operandst disjuncts;
 
   for(auto &a : assigns)
@@ -111,12 +135,13 @@ static exprt make_assigns_assertion(
     }
     else
     {
-      // auto fixed_a = add_function(function_identifier, a);
-      auto target_address = make_address(a);
-      auto lhs_address = make_address(lhs);
-      lhs_address =
-        typecast_exprt::conditional_cast(lhs_address, target_address.type());
-      disjuncts.push_back(equal_exprt(target_address, lhs_address));
+      auto match = assigns_match(a, lhs);
+
+      // trivial?
+      if(match.is_true())
+        return true_exprt();
+
+      disjuncts.push_back(std::move(match));
     }
   }
 
