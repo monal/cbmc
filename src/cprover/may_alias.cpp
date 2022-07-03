@@ -109,7 +109,7 @@ static optionalt<object_address_exprt> find_object(const exprt &expr)
 }
 
 // Is 'expr' on the stack and it's address is not taken?
-static bool stack_and_not_dirty(
+bool stack_and_not_dirty(
   const exprt &expr,
   const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
   const namespacet &ns)

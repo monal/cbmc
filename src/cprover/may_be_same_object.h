@@ -19,7 +19,7 @@ Author:
 class namespacet;
 
 // check whether the given two addresses may point to same object
-optionalt<exprt> may_be_same_object(
+exprt may_be_same_object(
   const exprt &,
   const exprt &,
   const std::unordered_set<symbol_exprt, irep_hash> &address_taken,

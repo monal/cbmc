@@ -27,6 +27,7 @@ Author:
 #include <util/symbol.h>
 
 #include "may_alias.h"
+#include "may_be_same_object.h"
 #include "sentinel_dll.h"
 #include "state.h"
 
@@ -548,6 +549,7 @@ exprt simplify_ok_expr(
     auto rec_result = simplify_state_expr_node(
       src.with_state(enter_scope_state_expr.state()), address_taken, ns);
 
+#if 0
     // replace array by array[0]
     auto enter_scope_address =
       enter_scope_state_expr.object_type().id() == ID_array ?
@@ -561,6 +563,10 @@ exprt simplify_ok_expr(
       return rec_result;
 
     auto same_object = ::same_object(pointer, enter_scope_state_expr.address());
+#else
+    auto same_object = may_be_same_object(
+      pointer, enter_scope_state_expr.address(), address_taken, ns);
+#endif
 
     auto simplified_same_object =
       simplify_state_expr(same_object, address_taken, ns);

@@ -15,6 +15,7 @@ SRC = address_taken.cpp \
       instrument_contracts.cpp \
       instrument_given_invariants.cpp \
       may_alias.cpp \
+      may_be_same_object.cpp \
       propagate.cpp \
       report_properties.cpp \
       report_traces.cpp \

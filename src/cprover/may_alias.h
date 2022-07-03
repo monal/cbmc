@@ -27,4 +27,9 @@ optionalt<exprt> may_alias(
   const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
   const namespacet &);
 
+bool stack_and_not_dirty(
+  const exprt &,
+  const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
+  const namespacet &);
+
 #endif // CPROVER_CPROVER_MAY_ALIAS_H
