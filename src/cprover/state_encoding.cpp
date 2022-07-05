@@ -300,6 +300,14 @@ exprt state_encodingt::evaluate_expr_rec(
       evaluate_expr_rec(loc, state, is_cstring_expr.op(), bound_symbols);
     return binary_predicate_exprt(state, ID_state_is_cstring, pointer);
   }
+  else if(what.id() == ID_cstrlen)
+  {
+    // we need to add the state
+    const auto &cstrlen_expr = to_cstrlen_expr(what);
+    auto address =
+      evaluate_expr_rec(loc, state, cstrlen_expr.op(), bound_symbols);
+    return state_cstrlen_exprt(state, address, cstrlen_expr.type());
+  }
   else if(what.id() == ID_is_sentinel_dll)
   {
     // we need to add the state

@@ -639,6 +639,24 @@ static bool is_one(const exprt &src)
 }
 #endif
 
+static bool is_a_char_type(const typet &type)
+{
+  return (type.id() == ID_signedbv || type.id() == ID_unsignedbv) &&
+         to_bitvector_type(type).get_width() == char_type().get_width();
+}
+
+static bool is_zero_char(const exprt &src, const namespacet &ns)
+{
+  if(!is_a_char_type(src.type()))
+    return false;
+
+  auto src_simplified = simplify_expr(src, ns);
+
+  auto integer_opt = numeric_cast<mp_integer>(src);
+
+  return integer_opt.has_value() && *integer_opt == 0;
+}
+
 exprt simplify_is_cstring_expr(
   state_is_cstring_exprt src,
   const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
@@ -747,17 +765,16 @@ exprt simplify_cstrlen_expr(
 
   if(state.id() == ID_update_state)
   {
-#if 0
     const auto &update_state_expr = to_update_state_expr(state);
 
     auto cstrlen_in_old_state = src.with_state(update_state_expr.state());
     auto simplified_cstrlen_in_old_state =
       simplify_state_expr_node(cstrlen_in_old_state, address_taken, ns);
 
-    auto may_alias =
-      ::may_alias(pointer, update_state_expr.address(), address_taken, ns);
+    auto may_be_same_object = ::may_be_same_object(
+      pointer, update_state_expr.address(), address_taken, ns);
 
-    if(may_alias.has_value() && may_alias->is_false())
+    if(may_be_same_object.is_false())
     {
       // different objects
       // cstrlen(s[x:=v], p) --> cstrlen(s, p)
@@ -767,20 +784,12 @@ exprt simplify_cstrlen_expr(
     // maybe the same
 
     // Are we writing zero?
-    if(update_state_expr.new_value().is_zero())
+    if(is_zero_char(update_state_expr.new_value(), ns))
     {
-      // cstrlen(s[p:=0], q) --> if p alias q then 0 else cstrlen(s, q)
-      auto same_object = ::same_object(pointer, update_state_expr.address());
-
-      auto simplified_same_object =
-        simplify_expr(simplify_state_expr(same_object, address_taken, ns), ns);
-
-      auto zero = from_integer(0, src.type());
-
-      return if_exprt(
-        simplified_same_object, zero, simplified_cstrlen_in_old_state);
+      // cstrlen(s[p:=0], p) --> 0
+      if(pointer == update_state_expr.address())
+        return from_integer(0, src.type());
     }
-#endif
   }
 
   if(pointer.id() == ID_plus)

@@ -361,7 +361,7 @@ exprt axiomst::replace(exprt src)
 
   if(
     src.id() == ID_initial_state || src.id() == ID_evaluate ||
-    src.id() == ID_state_is_cstring || src.id() == ID_cstrlen ||
+    src.id() == ID_state_is_cstring || src.id() == ID_state_cstrlen ||
     src.id() == ID_state_is_sentinel_dll ||
     src.id() == ID_state_is_dynamic_object ||
     src.id() == ID_state_object_size || src.id() == ID_state_live_object ||
