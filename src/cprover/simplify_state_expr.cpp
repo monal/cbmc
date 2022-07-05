@@ -737,6 +737,94 @@ exprt simplify_is_cstring_expr(
   return std::move(src);
 }
 
+exprt simplify_cstrlen_expr(
+  state_cstrlen_exprt src,
+  const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
+  const namespacet &ns)
+{
+  const auto &state = src.state();
+  const auto &pointer = src.address();
+
+  if(state.id() == ID_update_state)
+  {
+#if 0
+    const auto &update_state_expr = to_update_state_expr(state);
+
+    auto cstrlen_in_old_state = src.with_state(update_state_expr.state());
+    auto simplified_cstrlen_in_old_state =
+      simplify_state_expr_node(cstrlen_in_old_state, address_taken, ns);
+
+    auto may_alias =
+      ::may_alias(pointer, update_state_expr.address(), address_taken, ns);
+
+    if(may_alias.has_value() && may_alias->is_false())
+    {
+      // different objects
+      // cstrlen(s[x:=v], p) --> cstrlen(s, p)
+      return simplified_cstrlen_in_old_state;
+    }
+
+    // maybe the same
+
+    // Are we writing zero?
+    if(update_state_expr.new_value().is_zero())
+    {
+      // cstrlen(s[p:=0], q) --> if p alias q then 0 else cstrlen(s, q)
+      auto same_object = ::same_object(pointer, update_state_expr.address());
+
+      auto simplified_same_object =
+        simplify_expr(simplify_state_expr(same_object, address_taken, ns), ns);
+
+      auto zero = from_integer(0, src.type());
+
+      return if_exprt(
+        simplified_same_object, zero, simplified_cstrlen_in_old_state);
+    }
+#endif
+  }
+
+  if(pointer.id() == ID_plus)
+  {
+#if 0
+    auto &plus_expr = to_plus_expr(pointer);
+    if(plus_expr.operands().size() == 2 && is_one(plus_expr.op1()))
+    {
+      // is_cstring(ς, p + 1)) --> is_cstring(ς, p) ∨ ς(p)=0
+      auto new_is_cstring = src;
+      new_is_cstring.op1() = plus_expr.op0();
+      auto type = to_pointer_type(pointer.type()).base_type();
+      auto zero = from_integer(0, type);
+      auto is_zero =
+        equal_exprt(evaluate_exprt(state, plus_expr.op0(), type), zero);
+      return or_exprt(new_is_cstring, is_zero);
+    }
+#endif
+  }
+  else if(
+    pointer.id() == ID_address_of &&
+    to_address_of_expr(pointer).object().id() == ID_string_constant)
+  {
+#if 0
+    // is_cstring(ς, &"...")) --> true
+    return true_exprt();
+#endif
+  }
+  else if(
+    pointer.id() == ID_element_address &&
+    to_element_address_expr(pointer).base().id() == ID_address_of &&
+    to_address_of_expr(to_element_address_expr(pointer).base()).object().id() ==
+      ID_string_constant)
+  {
+#if 0
+    // TODO: compare offset to length
+    // is_cstring(ς, element_address(&"...", 0))) --> true
+    return true_exprt();
+#endif
+  }
+
+  return std::move(src);
+}
+
 exprt simplify_is_sentinel_dll_expr(
   state_is_sentinel_dll_exprt src,
   const std::unordered_set<symbol_exprt, irep_hash> &address_taken,
@@ -913,6 +1001,10 @@ exprt simplify_state_expr_node(
   {
     return simplify_is_cstring_expr(
       to_state_is_cstring_expr(src), address_taken, ns);
+  }
+  else if(src.id() == ID_state_cstrlen)
+  {
+    return simplify_cstrlen_expr(to_state_cstrlen_expr(src), address_taken, ns);
   }
   else if(src.id() == ID_state_is_sentinel_dll)
   {

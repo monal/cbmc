@@ -630,6 +630,68 @@ inline state_is_cstring_exprt &to_state_is_cstring_expr(exprt &expr)
   return ret;
 }
 
+class state_cstrlen_exprt : public binary_exprt
+{
+public:
+  state_cstrlen_exprt(exprt state, exprt address, typet type)
+    : binary_exprt(
+        std::move(state),
+        ID_state_cstrlen,
+        std::move(address),
+        std::move(type))
+  {
+    PRECONDITION(this->state().type().id() == ID_state);
+    PRECONDITION(this->address().type().id() == ID_pointer);
+  }
+
+  const exprt &state() const
+  {
+    return op0();
+  }
+
+  exprt &state()
+  {
+    return op0();
+  }
+
+  const exprt &address() const
+  {
+    return op1();
+  }
+
+  // helper
+  state_cstrlen_exprt with_state(exprt state) const
+  {
+    auto result = *this; // copy
+    result.state() = std::move(state);
+    return result;
+  }
+};
+
+/// \brief Cast an exprt to a \ref state_cstrlen_exprt
+///
+/// \a expr must be known to be \ref state_cstrlen_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref state_cstrlen_exprt
+inline const state_cstrlen_exprt &to_state_cstrlen_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_state_cstrlen);
+  const state_cstrlen_exprt &ret =
+    static_cast<const state_cstrlen_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_state_cstrlen_expr(const exprt &)
+inline state_cstrlen_exprt &to_state_cstrlen_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_state_cstrlen);
+  state_cstrlen_exprt &ret = static_cast<state_cstrlen_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
 class state_is_dynamic_object_exprt : public binary_predicate_exprt
 {
 public:
