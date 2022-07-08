@@ -1,7 +1,7 @@
-KNOWNBUG
-check_postcondition1.c
+CORE
+check_postcondition5.c
 
 ^EXIT=0$
 ^SIGNAL=0$
-^\[my_function1\.postcondition\.1\] line \d+ postcondition: SUCCESS$
+^\[my_function\.postcondition\.1\] line \d+ postcondition: SUCCESS$
 --

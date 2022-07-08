@@ -70,6 +70,13 @@ exprt simplify_evaluate_update(
   auto may_alias = ::may_alias(
     evaluate_expr.address(), update_state_expr.address(), address_taken, ns);
 
+#if 0
+  if(may_alias.has_value())
+    std::cout << "M: " << format(*may_alias) << "\n";
+  else
+    std::cout << "M: ?\n";
+#endif
+
   if(may_alias.has_value())
   {
     // 'simple' case

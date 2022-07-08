@@ -122,15 +122,15 @@ bool stack_and_not_dirty(
     if(has_prefix(id2string(identifier), "va_arg::"))
       return true; // on the stack, and might alias
     else if(has_prefix(id2string(identifier), "var_args::"))
-      return false; // on the stack, but can't take address
+      return false; // on the stack -- can take address?
     else if(has_prefix(id2string(identifier), "va_args::"))
-      return false; // on the stack, but can't take address
+      return false; // on the stack -- can take address?
     else if(has_prefix(id2string(identifier), "va_arg_array::"))
-      return false; // on the stack, but can't take address
+      return false; // on the stack -- can take address?
     else if(has_prefix(id2string(identifier), "old::"))
-      return false; // on the stack, but can't take address
+      return true; // on the stack, but can't take address
     else if(identifier == "return_value")
-      return false; // on the stack, but can't take address
+      return true; // on the stack, but can't take address
     const auto &symbol = ns.lookup(symbol_expr);
     return !symbol.is_static_lifetime &&
            address_taken.find(symbol_expr) == address_taken.end();
