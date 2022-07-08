@@ -46,6 +46,16 @@ static exprt make_address(exprt src)
 }
 
 // add the function to the source location
+source_locationt
+add_function(irep_idt function_identifier, source_locationt src)
+{
+  if(!src.get_file().empty())
+    src.set_function(function_identifier);
+
+  return src;
+}
+
+// add the function to the source location
 exprt add_function(irep_idt function_identifier, exprt src)
 {
   for(auto &op : src.operands())
@@ -226,6 +236,9 @@ void instrument_contract_checks(
   if(body.instructions.empty())
     return; // nothing to check
 
+  // new instructions to add at the beginning of the function
+  goto_programt add_at_beginning;
+
   // precondition?
   if(!contract.requires().empty())
   {
@@ -234,11 +247,9 @@ void instrument_contract_checks(
     for(auto &assumption : contract.requires())
     {
       auto fixed_assumption = add_function(f.first, assumption);
-      dest.add(goto_programt::make_assumption(
-        fixed_assumption, assumption.source_location()));
+      add_at_beginning.add(goto_programt::make_assumption(
+        fixed_assumption, fixed_assumption.source_location()));
     }
-
-    body.destructive_insert(body.instructions.begin(), dest);
   }
 
   // postcondition?
@@ -265,22 +276,26 @@ void instrument_contract_checks(
 
       auto replaced_assertion = replace_old(assertion, f.first, old_exprs);
 
+      auto fixed_assertion = add_function(f.first, replaced_assertion);
+
       auto assertion_instruction =
-        goto_programt::make_assertion(replaced_assertion, std::move(location));
+        goto_programt::make_assertion(fixed_assertion, std::move(location));
 
       body.insert_before_swap(last, assertion_instruction);
     }
 
     // Add assignments to 'old' symbols at the beginning of the function.
-    goto_programt assignments;
     for(const auto &old_expr : old_exprs)
     {
+      auto lhs = old_expr.first;
+      auto fixed_rhs = add_function(f.first, old_expr.second);
       auto assignment_instruction = goto_programt::make_assignment(
-        old_expr.first, old_expr.second, symbol.location);
-      assignments.add(std::move(assignment_instruction));
+        lhs, fixed_rhs, add_function(f.first, symbol.location));
+      add_at_beginning.add(std::move(assignment_instruction));
     }
-    body.destructive_insert(body.instructions.begin(), assignments);
   }
+
+  body.destructive_insert(body.instructions.begin(), add_at_beginning);
 
   // assigns?
   if(!contract.assigns().empty() ||
