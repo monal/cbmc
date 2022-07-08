@@ -8,7 +8,7 @@ trace2.c
 ^   4 x.c := 0$
 ^  12 x.a := 123$
 ^  13 x.b := 123$
-^  14 array\[cast\(1, signedbv\[64\]\)\] := 10$
-^  15 array\[cast\(2, signedbv\[64\]\)\] := 20$
-^  16 array\[cast\(ς\(❝i❞\), signedbv\[64\]\)\] := 30$
+^  14 array\[1\] := 10$
+^  15 array\[2\] := 20$
+^  16 array\[3\] := 30$
 --

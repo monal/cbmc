@@ -119,7 +119,7 @@ propertyt::tracet counterexample(
       if(argument.id() == ID_update_state)
       {
         const auto &update_state = to_update_state_expr(argument);
-        auto address = update_state.address();
+        auto address = evaluator(memory, solver, update_state.address(), ns);
         auto value = evaluator(memory, solver, update_state.new_value(), ns);
         state.updates.emplace_back(address, value);
         memory[address] = value;
