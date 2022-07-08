@@ -46,6 +46,17 @@ optionalt<exprt> address_to_lvalue(exprt src)
     else
       return {};
   }
+  else if(src.id() == ID_annotated_pointer_constant)
+  {
+    const auto &pointer =
+      to_annotated_pointer_constant_expr(src).symbolic_pointer();
+    if(
+      pointer.id() == ID_address_of &&
+      to_address_of_expr(pointer).object().id() == ID_symbol)
+      return to_address_of_expr(pointer).object();
+    else
+      return {};
+  }
   else
     return {};
 }
