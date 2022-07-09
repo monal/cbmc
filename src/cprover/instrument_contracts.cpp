@@ -252,13 +252,13 @@ void instrument_contract_checks(
     }
   }
 
+  // record "old(...)" expressions.
+  std::vector<std::pair<symbol_exprt, exprt>> old_exprs;
+
   // postcondition?
   if(!contract.ensures().empty())
   {
-    // Stick these in as assertions at the end, and also take
-    // care of "old(...)" expressions.
-    std::vector<std::pair<symbol_exprt, exprt>> old_exprs;
-
+    // Stick the postconditions in as assertions at the end
     auto last = body.instructions.end();
     if(std::prev(last)->is_end_function())
       last = std::prev(last);
@@ -283,16 +283,29 @@ void instrument_contract_checks(
 
       body.insert_before_swap(last, assertion_instruction);
     }
+  }
 
-    // Add assignments to 'old' symbols at the beginning of the function.
-    for(const auto &old_expr : old_exprs)
-    {
-      auto lhs = old_expr.first;
-      auto fixed_rhs = add_function(f.first, old_expr.second);
-      auto assignment_instruction = goto_programt::make_assignment(
-        lhs, fixed_rhs, add_function(f.first, symbol.location));
-      add_at_beginning.add(std::move(assignment_instruction));
-    }
+  // do 'old' in the body
+  if(
+    !contract.assigns().empty() || !contract.requires().empty() ||
+    !contract.ensures().empty())
+  {
+    irep_idt function_identifier = f.first;
+    for(auto &instruction : body.instructions)
+      instruction.transform(
+        [function_identifier, &old_exprs](exprt expr) -> optionalt<exprt> {
+          return replace_old(expr, function_identifier, old_exprs);
+        });
+  }
+
+  // Add assignments to 'old' symbols at the beginning of the function.
+  for(const auto &old_expr : old_exprs)
+  {
+    auto lhs = old_expr.first;
+    auto fixed_rhs = add_function(f.first, old_expr.second);
+    auto assignment_instruction = goto_programt::make_assignment(
+      lhs, fixed_rhs, add_function(f.first, symbol.location));
+    add_at_beginning.add(std::move(assignment_instruction));
   }
 
   body.destructive_insert(body.instructions.begin(), add_at_beginning);
