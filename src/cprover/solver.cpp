@@ -371,6 +371,29 @@ void solver(
     property.status = propertyt::DROPPED;
 }
 
+void solver_progress(size_t i, size_t n, bool verbose)
+{
+  if(verbose)
+  {
+  }
+  else
+  {
+    if(i == n)
+    {
+      if(consolet::is_terminal())
+        std::cout << "\x1b[1A\x1b[0K"; // clear the line
+    }
+    else
+    {
+      if(i != 0 && consolet::is_terminal())
+        std::cout << "\x1b[1A";
+
+      std::cout << consolet::orange << "Doing property " << (i + 1) << '/' << n
+                << consolet::reset << '\n';
+    }
+  }
+}
+
 solver_resultt solver(
   const std::vector<exprt> &constraints,
   const solver_optionst &solver_options,
@@ -398,7 +421,12 @@ solver_resultt solver(
 
   // solve each property separately, in order of occurence
   for(std::size_t i = 0; i < properties.size(); i++)
+  {
+    solver_progress(i, properties.size(), solver_options.verbose);
     solver(frames, address_taken, solver_options, ns, properties, i);
+  }
+
+  solver_progress(properties.size(), properties.size(), solver_options.verbose);
 
   // reporting
   report_properties(properties);
