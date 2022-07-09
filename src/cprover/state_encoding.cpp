@@ -1169,8 +1169,6 @@ void state_encoding(
   }
 }
 
-void format_hooks();
-
 void state_encoding(
   const goto_modelt &goto_model,
   state_encoding_formatt state_encoding_format,
@@ -1182,7 +1180,6 @@ void state_encoding(
   {
   case state_encoding_formatt::ASCII:
   {
-    format_hooks();
     ascii_encoding_targett dest(out);
     state_encoding(goto_model, program_is_inlined, contract, dest);
   }
@@ -1204,8 +1201,6 @@ void variable_encoding(
   std::ostream &out)
 {
   const namespacet ns(goto_model.symbol_table);
-
-  format_hooks();
 
   container_encoding_targett container;
   state_encoding(goto_model, true, {}, container);
@@ -1239,8 +1234,6 @@ solver_resultt state_encoding_solver(
   const solver_optionst &solver_options)
 {
   const namespacet ns(goto_model.symbol_table);
-
-  format_hooks();
 
   container_encoding_targett container;
   state_encoding(goto_model, program_is_inlined, contract, container);

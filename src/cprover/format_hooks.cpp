@@ -1,5 +1,7 @@
 #include <util/format_expr.h>
+#include <util/format_type.h>
 #include <util/pointer_expr.h>
+#include <util/std_code.h>
 
 #include "state.h"
 
@@ -120,5 +122,14 @@ void format_hooks()
       const auto &type_compatible_expr = to_state_type_compatible_expr(expr);
       return os << "type_compatible(" << format(type_compatible_expr.state())
                 << ", " << format(type_compatible_expr.address()) << ')';
+    });
+
+  add_format_hook(
+    ID_side_effect, [](std::ostream &os, const exprt &expr) -> std::ostream & {
+      const auto &side_effect_expr = to_side_effect_expr(expr);
+      if(side_effect_expr.get_statement() == ID_nondet)
+        return os << "nondet " << format(side_effect_expr.type());
+      else
+        return os << "side-effect-" << side_effect_expr.get_statement();
     });
 }

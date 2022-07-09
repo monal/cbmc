@@ -34,6 +34,7 @@ Author: Daniel Kroening, dkr@amazon.com
 #include <langapi/mode.h>
 
 #include "c_safety_checks.h"
+#include "format_hooks.h"
 #include "help_formatter.h"
 #include "instrument_contracts.h"
 #include "instrument_given_invariants.h"
@@ -113,6 +114,7 @@ int cprover_parse_optionst::main()
     }
 
     register_language(new_ansi_c_language);
+    format_hooks();
 
     if(cmdline.args.empty())
     {
