@@ -1,4 +1,4 @@
-KNOWNBUG
+CORE
 use_postcondition4.c
 
 ^EXIT=0$

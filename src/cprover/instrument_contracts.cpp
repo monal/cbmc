@@ -190,7 +190,7 @@ static bool is_old(const exprt &lhs)
 
 symbol_exprt find_old_expr(
   const exprt &src,
-  irep_idt function_identifier,
+  const std::string &prefix,
   std::vector<std::pair<symbol_exprt, exprt>> &old_exprs)
 {
   for(std::size_t i = 0; i < old_exprs.size(); i++)
@@ -200,8 +200,7 @@ symbol_exprt find_old_expr(
   }
 
   auto index = old_exprs.size();
-  irep_idt identifier =
-    "old::" + id2string(function_identifier) + "#" + std::to_string(index);
+  irep_idt identifier = prefix + std::to_string(index);
   old_exprs.emplace_back(symbol_exprt(identifier, src.type()), src);
 
   return old_exprs.back().first;
@@ -209,20 +208,39 @@ symbol_exprt find_old_expr(
 
 exprt replace_old(
   exprt src,
-  irep_idt function_identifier,
+  const std::string &prefix,
   std::vector<std::pair<symbol_exprt, exprt>> &old_exprs)
 {
   if(src.id() == ID_old)
   {
     const auto &old_expr = to_unary_expr(src);
-    return find_old_expr(old_expr.op(), function_identifier, old_exprs);
+    return find_old_expr(old_expr.op(), prefix, old_exprs);
   }
   else
   {
+    // rec. call
     for(auto &op : src.operands())
-      op = replace_old(op, function_identifier, old_exprs);
+      op = replace_old(op, prefix, old_exprs);
     return src;
   }
+}
+
+goto_programt old_assignments(
+  const std::vector<std::pair<symbol_exprt, exprt>> &old_exprs,
+  const source_locationt &source_location)
+{
+  goto_programt dest;
+
+  for(const auto &old_expr : old_exprs)
+  {
+    auto lhs = old_expr.first;
+    auto fixed_rhs = replace_source_location(old_expr.second, source_location);
+    auto assignment_instruction =
+      goto_programt::make_assignment(lhs, fixed_rhs, source_location);
+    dest.add(std::move(assignment_instruction));
+  }
+
+  return dest;
 }
 
 void instrument_contract_checks(
@@ -254,6 +272,7 @@ void instrument_contract_checks(
 
   // record "old(...)" expressions.
   std::vector<std::pair<symbol_exprt, exprt>> old_exprs;
+  const auto old_prefix = "old::" + id2string(f.first);
 
   // postcondition?
   if(!contract.ensures().empty())
@@ -274,7 +293,7 @@ void instrument_contract_checks(
       location.set_property_class(ID_postcondition);
       location.set_comment(comment);
 
-      auto replaced_assertion = replace_old(assertion, f.first, old_exprs);
+      auto replaced_assertion = replace_old(assertion, old_prefix, old_exprs);
 
       auto fixed_assertion = add_function(f.first, replaced_assertion);
 
@@ -290,22 +309,18 @@ void instrument_contract_checks(
     !contract.assigns().empty() || !contract.requires().empty() ||
     !contract.ensures().empty())
   {
-    irep_idt function_identifier = f.first;
     for(auto &instruction : body.instructions)
       instruction.transform(
-        [function_identifier, &old_exprs](exprt expr) -> optionalt<exprt> {
-          return replace_old(expr, function_identifier, old_exprs);
+        [&old_prefix, &old_exprs](exprt expr) -> optionalt<exprt> {
+          return replace_old(expr, old_prefix, old_exprs);
         });
   }
 
   // Add assignments to 'old' symbols at the beginning of the function.
-  for(const auto &old_expr : old_exprs)
   {
-    auto lhs = old_expr.first;
-    auto fixed_rhs = add_function(f.first, old_expr.second);
-    auto assignment_instruction = goto_programt::make_assignment(
-      lhs, fixed_rhs, add_function(f.first, symbol.location));
-    add_at_beginning.add(std::move(assignment_instruction));
+    auto tmp =
+      old_assignments(old_exprs, add_function(f.first, symbol.location));
+    add_at_beginning.destructive_append(tmp);
   }
 
   body.destructive_insert(body.instructions.begin(), add_at_beginning);
@@ -351,6 +366,8 @@ void replace_function_calls_by_contracts(
   auto &body = f.second.body;
   const namespacet ns(goto_model.symbol_table);
 
+  std::size_t call_site_counter = 0;
+
   for(auto it = body.instructions.begin(); it != body.instructions.end(); it++)
   {
     if(it->is_function_call())
@@ -365,7 +382,14 @@ void replace_function_calls_by_contracts(
         if(
           contract.requires().empty() && contract.ensures().empty() &&
           contract.assigns().empty())
+        {
           continue;
+        }
+
+        // record "old(...)" expressions.
+        std::vector<std::pair<symbol_exprt, exprt>> old_exprs;
+        const auto old_prefix = "old::" + id2string(f.first) + "::call-site-" +
+                                std::to_string(++call_site_counter) + "::";
 
         // need to substitute parameters
         const auto f_it =
@@ -462,11 +486,21 @@ void replace_function_calls_by_contracts(
         {
           auto &location = it->source_location();
 
-          auto replaced_postcondition = postcondition;
-          replace_symbol(replaced_postcondition);
+          auto replaced_postcondition1 = postcondition;
+          replace_symbol(replaced_postcondition1);
+
+          auto replaced_postcondition2 =
+            replace_old(replaced_postcondition1, old_prefix, old_exprs);
 
           dest.add(
-            goto_programt::make_assumption(replaced_postcondition, location));
+            goto_programt::make_assumption(replaced_postcondition2, location));
+        }
+
+        // now insert the assignents to old::... at the beginning
+        // of 'dest'
+        {
+          auto tmp = old_assignments(old_exprs, it->source_location());
+          dest.destructive_insert(dest.instructions.begin(), tmp);
         }
 
         // remove the function call
